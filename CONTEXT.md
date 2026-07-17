@@ -282,3 +282,13 @@ _Avoid_: Agent reasoning trace
 **Extension Profile**:
 An organization-approved, versioned schema and semantics package that cannot override core invariants.
 _Avoid_: Plugin, arbitrary event type
+
+## Localized terminology
+
+**Child Mission display name**:
+Localized prose uses `子任务` in Simplified Chinese, `子任務` in Traditional Chinese,
+`子ミッション` in Japanese, `Mission hija` in Spanish, `Mission enfant` in French, and
+`untergeordnete Mission` in German. Each name still denotes a complete Child Mission with its own
+Group, Coordinator, budget, and Approval lifecycle; Chinese prose uses `工作项` or `工作項` for a
+WorkItem.
+_Avoid_: `子 Mission`, `子使命`, using `子任务` or `子任務` for a WorkItem

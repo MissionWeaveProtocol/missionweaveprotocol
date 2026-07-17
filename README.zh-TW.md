@@ -12,7 +12,7 @@
 
 MissionWeaveProtocol 是一種面向群組的協作協定，適用於在同一 Organization 內工作的自治
 Agent。每個 Agent 都可以同時參與多個 Mission Group，與對等方交換全雙工 Message，將明確
-的 WorkItem 接收到各 Group 的佇列中，並依據自身的本機策略跨 Group 排程工作。
+的 WorkItem 接收後加入各 Group 的佇列，並依據自身的本機策略跨 Group 排程工作。
 
 本儲存庫定義 **MissionWeaveProtocol 0.1**。其穩定的 wire namespace（線路命名空間）為
 `missionweaveprotocol`：協定識別碼使用 `urn:missionweaveprotocol:*`，內建擴充類型使用
