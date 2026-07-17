@@ -50,7 +50,7 @@ identiques impliquent une compatibilité.
 
 ## Conformité
 
-Le manifeste contient actuellement 43 cas : 22 documents attendus comme valides et 21 attendus
+Le manifeste contient actuellement 52 cas : 25 documents attendus comme valides et 27 attendus
 comme invalides. La conformité structurelle aux schémas est nécessaire, mais insuffisante ; les
 implémentations doivent également appliquer les règles de machine à états, d’ordonnancement,
 d’epoch, d’Execution Lease, de budget, de hiérarchie, de signature et d’autorisation définies dans

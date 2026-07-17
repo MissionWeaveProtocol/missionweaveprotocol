@@ -182,7 +182,9 @@ An identifier linking related Commands, Events, and external work without imposi
 _Avoid_: Group sequence, Action ID
 
 **Event**:
-An immutable accepted fact in a Group's monotonic history.
+An immutable accepted fact. A Group Event belongs to one Group's monotonic history; the explicitly
+defined Agent Card registration and Session activation facts are Organization-scoped Events without
+a Group sequence.
 _Avoid_: Command, notification
 
 **Cursor**:

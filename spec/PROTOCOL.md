@@ -195,9 +195,10 @@ WebSocket handshake uses a fresh server challenge:
    issued Session Epoch.
 
 Issuing epoch `n + 1` invalidates every session at epoch `n` or lower for that Agent ID.
-The Group Authority MUST validate the Session Epoch on every state-changing Command. A
-restarted runtime MAY reclaim its stable Agent ID; two runtimes MUST NOT operate that identity
-concurrently.
+The Group Authority MUST validate the Session Epoch on every state-changing Agent Command.
+Human and Organization-service Commands do not carry an Agent Session Epoch and MUST NOT invent
+one. A restarted runtime MAY reclaim its stable Agent ID; two runtimes MUST NOT operate that
+identity concurrently.
 
 Durable Commands and Artifact manifests MUST be individually signed. Heartbeats and Presence
 Records rely on the authenticated session. Long-lived shared API keys are NOT RECOMMENDED.
@@ -208,9 +209,10 @@ the Agent ID and fencing semantics.
 
 Unless an Extension Profile specifies an additional signature, a signature covers the JCS
 canonical form of the complete object with its top-level `signature` member omitted. The
-Command signature therefore covers at least its Action ID, actor, Session Epoch, Group ID,
-kind, payload, correlation ID, timestamp, and extensions. An Event signature is made by the
-Group Authority and covers its Event ID, Group sequence, cause, actor, payload, and time.
+Command signature therefore covers at least its Action ID, actor, applicable Session,
+Membership, and Coordinator Epochs, Group ID when present, kind, payload, correlation ID,
+timestamp, and extensions. An Event signature is made by the accepting authority and covers its
+Event ID, Group sequence when present, cause, actor, payload, and time.
 
 Signature verification MUST use the pinned key ID and key validity interval. Implementations
 MUST reject altered signed content, an unknown or revoked key, or an invalid algorithm.
@@ -228,7 +230,7 @@ The Mission lifecycle is:
 
 | Current state | Command or cause | Next state | Authority |
 | --- | --- | --- | --- |
-| none | `mission.create` with a Coordinator lease | `active` | human MissionOwner or control plane |
+| none | `mission.create` with a Coordinator lease | `active` | human MissionOwner, possibly through the control plane |
 | none | `mission.create_follow_up` linked to an approved Mission | `active` | the same human MissionOwner |
 | none | `mission.create_child` linked to a parent WorkItem | `active` | Parent Coordinator as child MissionOwner |
 | `active` | `mission.submit_for_approval` | `awaiting_approval` | current Coordinator |
@@ -287,8 +289,11 @@ sequence numbers. Reconnection MAY use a snapshot followed by later Events.
 ## 8. Membership, visibility, and attention
 
 Membership binds an Agent or human to one Group, an epoch, a role, a visibility starting
-sequence, and explicit capabilities. A Command from a revoked or stale Membership Epoch MUST
-be rejected. MissionOwner and Coordinator Memberships MUST have complete Group visibility.
+sequence, and explicit capabilities. A Group-scoped Agent or human Command MUST carry its current
+Membership Epoch; a Command from a revoked or stale Membership Epoch MUST be rejected.
+Organization-service Commands are authenticated and authorized by Organization policy rather than
+by inventing a Group Membership Epoch. MissionOwner and Coordinator Memberships MUST have complete
+Group visibility.
 
 Worker Membership SHOULD be just in time:
 
@@ -655,11 +660,30 @@ to inspect the complete Mission tree.
 
 ### 15.1 Commands
 
-A Command is a signed request for one structured state transition. The Command envelope MUST
-contain a stable Action ID, protocol version, actor, Session Epoch, Membership Epoch, Group ID,
-kind, payload, correlation ID, issue time, and signature. It SHOULD contain the expected
-aggregate revision when modifying existing structured state. A Command using a one-shot
-cooperation escalation MUST also contain `cooperationOverrideGrantId`.
+A Command is a signed request for one structured state transition. Every Command envelope MUST
+contain a stable Action ID, protocol version, actor, kind, payload, correlation ID, issue time,
+and signature. A Group-scoped Command MUST contain its Group ID. A state-changing Agent Command
+MUST additionally contain the current Session Epoch and Membership Epoch. A human Command in an
+existing Group MUST contain the current Membership Epoch and MUST NOT contain an Agent Session
+Epoch. An Organization-service Command MUST NOT invent Agent Session or Membership Epochs.
+
+`mission.create` and `mission.create_follow_up` carry the ID of the Group being created but omit
+Membership and Session Epochs because the new Group Membership does not yet exist and human
+Commands do not use Agent sessions. A control plane may authenticate, relay, and validate
+`mission.create`, but the signed Command actor and resulting root MissionOwner remain that human;
+the control plane does not become the MissionOwner. The Organization-owned
+`ext.missionweaveprotocol.registry.agent_card_register` and
+`ext.missionweaveprotocol.identity.session_open` bootstrap Commands omit Group ID and all three
+role/session epochs.
+
+An Agent Command whose authority derives from the current Coordinator lease MUST contain the
+current Coordinator Epoch. This is required for `mission.renew_coordinator`,
+`mission.submit_for_approval`, `mission.create_child`, `membership.grant_delegation`, and
+`work.accept_result`, and for an Agent-issued `mission.terminate`. A service-issued
+`mission.terminate` is instead authorized by Organization policy and does not carry a Coordinator
+Epoch. A Command SHOULD contain the expected aggregate revision when modifying existing structured
+state. A Command using a one-shot cooperation escalation MUST also contain
+`cooperationOverrideGrantId`.
 
 The same `(actor ID, Action ID)` with byte-equivalent canonical signed content MUST return the
 original receipt and MUST NOT append a second state transition. Reuse of the same Action ID
@@ -688,6 +712,7 @@ work.block                     work.unblock
 work.submit                    work.accept_result
 work.fail                      work.cancel
 artifact.publish               approval.grant_execution
+policy.grant_cooperation_override
 ```
 
 The reference core additionally defines Organization-owned `ext.missionweaveprotocol.*`
@@ -698,11 +723,15 @@ or Mission pause, but those names are not v0.1 core transitions.
 
 ### 15.2 Events and Group order
 
-An Event is an immutable accepted fact. The Event envelope MUST contain Event ID, Group ID,
+An Event is an immutable accepted fact. A Group Event envelope MUST contain Event ID, Group ID,
 strictly increasing Group sequence, aggregate revision, kind, actor, cause, correlation ID,
-occurrence time, payload, and Group Authority signature.
+occurrence time, payload, and Group Authority signature. The Organization-scoped
+`ext.missionweaveprotocol.registry.agent_card_registered` and
+`ext.missionweaveprotocol.identity.session_opened` facts contain the common Event identity,
+actor, cause, correlation, payload, time, accepting authority, and signature fields, but MUST NOT
+contain Group ID, Group sequence, or Group aggregate revision.
 
-The Group Authority assigns one monotonic sequence to every durable Event in a Group. This
+The Group Authority assigns one monotonic sequence to every durable Group Event. This
 sequence supplies deterministic display, recovery, and audit order. Ordinary Messages may be
 logically concurrent even though the service assigns display order. Structured transitions
 rely on the Event order and aggregate revisions.
@@ -727,6 +756,7 @@ work.blocked                    work.unblocked
 work.submitted                  work.result.accepted
 work.failed                     work.cancelled
 artifact.published              approval.execution.granted
+policy.cooperation_override.granted
 group.snapshot.created          group.archived
 ```
 
@@ -836,6 +866,7 @@ exposing unauthorized data. Core codes are:
 | `AUTH_REQUIRED` | Authentication is absent |
 | `AUTH_INVALID_SIGNATURE` | A required signature failed |
 | `AUTH_STALE_SESSION` | Session Epoch is fenced |
+| `AUTH_STALE_COORDINATOR` | Coordinator Epoch is fenced |
 | `AUTH_FORBIDDEN` | Actor lacks permission or policy eligibility |
 | `GROUP_NOT_FOUND` | Group is absent or intentionally undisclosed |
 | `MEMBERSHIP_REQUIRED` | No applicable Membership |

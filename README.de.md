@@ -54,7 +54,7 @@ Kompatibilität abzuleiten.
 
 ## Konformität
 
-Das Manifest enthält derzeit 43 Fälle: 22 erwartbar gültige Dokumente und 21
+Das Manifest enthält derzeit 52 Fälle: 25 erwartbar gültige Dokumente und 27
 erwartbar ungültige Dokumente. Strukturelle Schema-Konformität ist notwendig,
 aber nicht ausreichend; Implementierungen müssen außerdem die Regeln der
 Spezifikation zu Zustandsmaschine, Reihenfolge, Epoch, Lease, Budget, Hierarchie,

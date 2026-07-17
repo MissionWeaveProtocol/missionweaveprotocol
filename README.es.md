@@ -51,7 +51,7 @@ lugar de suponer que dos números de versión iguales implican compatibilidad.
 
 ## Conformidad
 
-El manifest contiene actualmente 43 casos: 22 documentos que se espera que sean válidos y 21 que
+El manifest contiene actualmente 52 casos: 25 documentos que se espera que sean válidos y 27 que
 se espera que sean no válidos. La conformidad estructural con los JSON Schema es necesaria, pero
 no suficiente; las implementaciones también deben aplicar las reglas de máquina de estados,
 ordenación, epoch, lease, budget, jerarquía, firma y autorización de la especificación.

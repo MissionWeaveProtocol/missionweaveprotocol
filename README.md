@@ -47,7 +47,7 @@ mean compatibility.
 
 ## Conformance
 
-The manifest currently contains 43 cases: 22 expected-valid documents and 21 expected-invalid
+The manifest currently contains 52 cases: 25 expected-valid documents and 27 expected-invalid
 documents. Structural schema conformance is necessary but not sufficient; implementations must
 also enforce the state-machine, ordering, epoch, lease, budget, hierarchy, signature, and
 authorization rules in the specification.
