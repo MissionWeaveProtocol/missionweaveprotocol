@@ -6,6 +6,12 @@
     "valid": true
   },
   {
+    "name": "valid Command action ID with an empty URI hier-part",
+    "schema": "schemas/command.schema.json",
+    "instance": "conformance/vectors/valid/command-action-id-empty-hier-part.json",
+    "valid": true
+  },
+  {
     "name": "valid human Mission creation Command without pre-existing epochs",
     "schema": "schemas/command.schema.json",
     "instance": "conformance/vectors/valid/human-mission-create-command.json",

@@ -68,7 +68,7 @@ d’exécution.
 
 ## Conformité
 
-Le manifeste contient actuellement 55 cas : 25 documents attendus comme valides et 30 attendus
+Le manifeste contient actuellement 56 cas : 26 documents attendus comme valides et 30 attendus
 comme invalides. La conformité structurelle aux schémas est nécessaire, mais insuffisante ; les
 implémentations doivent également appliquer les règles de machine à états, d’ordonnancement,
 d’epoch, d’Execution Lease, de budget, de hiérarchie, de signature et d’autorisation définies dans

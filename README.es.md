@@ -68,7 +68,7 @@ conformidad completa del comportamiento del runtime.
 
 ## Conformidad
 
-El manifest contiene actualmente 55 casos: 25 documentos que se espera que sean válidos y 30 que
+El manifest contiene actualmente 56 casos: 26 documentos que se espera que sean válidos y 30 que
 se espera que sean no válidos. La conformidad estructural con los JSON Schema es necesaria, pero
 no suficiente; las implementaciones también deben aplicar las reglas de máquina de estados,
 ordenación, epoch, lease, budget, jerarquía, firma y autorización de la especificación.

@@ -97,6 +97,10 @@ terminators are invalid. UUID identifiers SHOULD use lower-case `urn:uuid:` form
 MUST compare identifiers byte-for-byte after the URI normalization rules chosen by the issuing
 Organization; recipients MUST NOT invent additional normalization.
 
+Every `format` keyword in the normative Schemas is an assertion requirement. Implementations MUST
+enable Draft 2020-12 format validation, including `uri` and `date-time`, rather than treating those
+keywords as annotations.
+
 ## 3. Terms and roles
 
 The domain glossary in [`../CONTEXT.md`](../CONTEXT.md) is normative. The following role

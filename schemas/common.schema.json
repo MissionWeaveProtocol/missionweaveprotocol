@@ -10,7 +10,7 @@
       "type": "string",
       "format": "uri",
       "$comment": "The absolute-URI prefix plus the whole-value ASCII guard avoids end-anchor acceptance before a final line feed.",
-      "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[A-Za-z0-9._~:/?#\\[\\]@!$&'()*+,;=%-]",
+      "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:",
       "not": {
         "pattern": "[^A-Za-z0-9._~:/?#\\[\\]@!$&'()*+,;=%-]"
       },
