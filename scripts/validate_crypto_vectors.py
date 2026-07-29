@@ -86,7 +86,7 @@ EXPECTED_FAILURE_HISTOGRAM = {
     "parse": 4,
     "schema": 5,
     "signature-envelope": 11,
-    "key-resolution": 20,
+    "key-resolution": 24,
     "canonicalization": 2,
     "signature": 4,
 }
@@ -114,6 +114,10 @@ EXPECTED_FAULT_SURFACES = {
     "unknown-key": "document",
     "key-id-alias": "document-and-registry",
     "public-key-wrong-length": "registry",
+    "registry-organization-id-relative-reference": "registry",
+    "registry-selected-service-principal-id-iri-only": "registry",
+    "registry-unrelated-principal-id-malformed-percent": "registry",
+    "registry-unrelated-key-id-trailing-line-feed": "registry",
     "key-not-yet-valid": "registry",
     "valid-until-equality": "registry",
     "revoked-at-equality": "registry",
@@ -244,6 +248,7 @@ class EnvelopeResult:
 
 @dataclass(frozen=True)
 class ResolvedKey:
+    organization_id: str
     key_id: str
     principal: dict[str, str]
     algorithm: str
@@ -1014,7 +1019,7 @@ def _validate_case_matrix(manifest: Mapping[str, Any]) -> None:
                     8,
                     "signature-envelope",
                 ),
-                "reject.key-resolution.matrix": (15, "key-resolution"),
+                "reject.key-resolution.matrix": (19, "key-resolution"),
                 "reject.canonicalization.data-model-matrix": (
                     2,
                     "canonicalization",
@@ -1084,9 +1089,9 @@ def _validate_case_matrix(manifest: Mapping[str, Any]) -> None:
         raise _bundle_error(
             f"expected 4 accept and 18 reject cases, found {accept_cases} and {reject_cases}"
         )
-    if complete_evaluations != 12 or rejected_evaluations != 46:
+    if complete_evaluations != 12 or rejected_evaluations != 50:
         raise _bundle_error(
-            "expected 58 evaluations (12 complete and 46 rejected), found "
+            "expected 62 evaluations (12 complete and 50 rejected), found "
             f"{complete_evaluations + rejected_evaluations} "
             f"({complete_evaluations} complete and {rejected_evaluations} rejected)"
         )
@@ -1384,7 +1389,48 @@ def _parse_rfc3339_value(value: str) -> Rfc3339Instant:
     )
 
 
+_PROTOCOL_URI_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+_INVALID_PERCENT_ESCAPE_RE = re.compile(r"%(?![0-9A-Fa-f]{2})")
+
+_STANDARD_FORMAT_CHECKER = FormatChecker()
 PROTOCOL_FORMAT_CHECKER = FormatChecker()
+
+
+@PROTOCOL_FORMAT_CHECKER.checks("uri")
+def _is_protocol_uri(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and all(0x21 <= ord(character) <= 0x7E for character in value)
+        and _PROTOCOL_URI_SCHEME_RE.match(value) is not None
+        and _INVALID_PERCENT_ESCAPE_RE.search(value) is None
+        and _STANDARD_FORMAT_CHECKER.conforms(value, "uri")
+    )
+
+
+def _validate_protocol_uri_contract() -> None:
+    accepted = (
+        "example:",
+        "example:/path",
+        "urn:example:%E2%82%AC",
+        "https://[2001:db8::1]/path",
+        "https://example.com/" + "a" * 513,
+    )
+    rejected = (
+        "",
+        "relative/path",
+        "1example:path",
+        "https://例え.テスト/",
+        "urn:example:%GG",
+        "example:/path\n",
+        "https://[not-an-ip]/",
+    )
+    for value in accepted:
+        if not _is_protocol_uri(value):
+            raise _bundle_error(f"protocol URI predicate rejects {value!r}")
+    for value in rejected:
+        if _is_protocol_uri(value):
+            raise _bundle_error(f"protocol URI predicate accepts {value!r}")
 
 
 @PROTOCOL_FORMAT_CHECKER.checks("date-time")
@@ -1652,6 +1698,8 @@ def _principal(value: object, *, stage: str, label: str) -> dict[str, str]:
         raise _semantic(stage, f"{label}.type is unsupported")
     if not isinstance(principal["id"], str):
         raise _semantic(stage, f"{label}.id is not a string")
+    if not _is_protocol_uri(principal["id"]):
+        raise _semantic(stage, f"{label}.id is not a protocol URI")
     return {"type": principal["type"], "id": principal["id"]}
 
 
@@ -1669,6 +1717,112 @@ def _positive_integer(value: object, *, stage: str, label: str) -> int:
     if integer < 1 or integer > 9007199254740991:
         raise _semantic(stage, f"{label} is outside the positive safe-integer range")
     return integer
+
+
+def _validate_registry_identifier_faults(
+    manifest: Mapping[str, Any], cache: Mapping[str, bytes]
+) -> None:
+    valid_path = "cryptography/keys/registry-valid.json"
+    valid = _parse_cached_json(cache, valid_path, label=valid_path)
+    if not isinstance(valid, dict):
+        raise _bundle_error("valid Registry fixture is not an object")
+
+    expected_fixtures: dict[str, tuple[str, Mapping[str, Any]]] = {}
+
+    organization = copy.deepcopy(valid)
+    organization["organizationId"] = "organizations/acme"
+    expected_fixtures["registry-organization-id-relative-reference"] = (
+        "cryptography/keys/registry-organization-id-relative-reference.json",
+        organization,
+    )
+
+    selected = copy.deepcopy(valid)
+    selected_binding = next(
+        binding
+        for binding in selected["bindings"]
+        if binding["keyId"]
+        == "urn:missionweaveprotocol:key:crypto-vector-organization-registry"
+    )
+    selected_binding["principal"]["id"] = (
+        "https://例え.テスト/services/organization-registry"
+    )
+    expected_fixtures["registry-selected-service-principal-id-iri-only"] = (
+        "cryptography/keys/registry-selected-service-principal-id-iri-only.json",
+        selected,
+    )
+
+    principal = copy.deepcopy(valid)
+    principal_binding = next(
+        binding
+        for binding in principal["bindings"]
+        if binding["keyId"]
+        == "urn:missionweaveprotocol:key:crypto-vector-security-owner"
+    )
+    principal_binding["principal"]["id"] = (
+        "urn:missionweaveprotocol:human:security-owner%GG"
+    )
+    expected_fixtures["registry-unrelated-principal-id-malformed-percent"] = (
+        "cryptography/keys/registry-unrelated-principal-id-malformed-percent.json",
+        principal,
+    )
+
+    key_id = copy.deepcopy(valid)
+    key_binding = next(
+        binding
+        for binding in key_id["bindings"]
+        if binding["keyId"]
+        == "urn:missionweaveprotocol:key:crypto-vector-security-owner"
+    )
+    key_binding["keyId"] += "\n"
+    expected_fixtures["registry-unrelated-key-id-trailing-line-feed"] = (
+        "cryptography/keys/registry-unrelated-key-id-trailing-line-feed.json",
+        key_id,
+    )
+
+    matrix = next(
+        case
+        for case in manifest["cases"]
+        if case["id"] == "reject.key-resolution.matrix"
+    )
+    evaluations = {
+        evaluation["fault"]["id"]: evaluation
+        for evaluation in matrix["evaluations"]
+        if evaluation["fault"]["id"] in expected_fixtures
+    }
+    if set(evaluations) != set(expected_fixtures):
+        raise _bundle_error("Registry identifier evaluations are incomplete")
+
+    for fault_id, (fixture_path, expected_fixture) in expected_fixtures.items():
+        actual_fixture = _parse_cached_json(cache, fixture_path, label=fixture_path)
+        if actual_fixture != expected_fixture:
+            raise _bundle_error(
+                f"fault {fault_id!r} is not the declared single-field mutation"
+            )
+        evaluation = evaluations[fault_id]
+        expected_profile = (
+            "agent-card"
+            if fault_id == "registry-selected-service-principal-id-iri-only"
+            else "command"
+        )
+        expected_document = (
+            "cryptography/vectors/signed-documents/valid/agent-card.json"
+            if expected_profile == "agent-card"
+            else "cryptography/vectors/signed-documents/valid/command.json"
+        )
+        expected_basis = (
+            {"caseId": "accept.profile-matrix.all-nine", "profileId": "agent-card"}
+            if expected_profile == "agent-card"
+            else {"caseId": "accept.command.golden", "profileId": "command"}
+        )
+        if (
+            evaluation["profileId"] != expected_profile
+            or evaluation["document"] != expected_document
+            or evaluation["registry"] != fixture_path
+            or evaluation["fault"]["basis"] != expected_basis
+            or evaluation["expect"]
+            != {"stage": "key-resolution", "wireCode": "AUTH_INVALID_SIGNATURE"}
+        ):
+            raise _bundle_error(f"fault {fault_id!r} metadata is incorrect")
 
 
 def _validate_fixture_structures(
@@ -1837,6 +1991,11 @@ def _resolve_key(raw: bytes, envelope: EnvelopeResult, *, label: str) -> Resolve
     )
     if not isinstance(registry_object["organizationId"], str):
         raise _semantic("key-resolution", "Registry organizationId is not a string")
+    organization_id = registry_object["organizationId"]
+    if not _is_protocol_uri(organization_id):
+        raise _semantic(
+            "key-resolution", "Registry organizationId is not a protocol URI"
+        )
     if (
         not isinstance(registry_object["bindings"], list)
         or not registry_object["bindings"]
@@ -1865,6 +2024,10 @@ def _resolve_key(raw: bytes, envelope: EnvelopeResult, *, label: str) -> Resolve
         key_id = binding["keyId"]
         if not isinstance(key_id, str):
             raise _semantic("key-resolution", f"{prefix}.keyId is not a string")
+        if not _is_protocol_uri(key_id):
+            raise _semantic(
+                "key-resolution", f"{prefix}.keyId is not a protocol URI"
+            )
         principal = _principal(
             binding["principal"], stage="key-resolution", label=f"{prefix}.principal"
         )
@@ -2040,6 +2203,7 @@ def _resolve_key(raw: bytes, envelope: EnvelopeResult, *, label: str) -> Resolve
             "key-resolution", "signing key is revoked at the protected time"
         )
     return ResolvedKey(
+        organization_id=organization_id,
         key_id=envelope.key_id,
         principal=principal,
         algorithm=selected["algorithm"],
@@ -2298,14 +2462,14 @@ def _run_cases(
                 completed += 1
             else:
                 rejected += 1
-    if (evaluations, completed, rejected) != (58, 12, 46):
+    if (evaluations, completed, rejected) != (62, 12, 50):
         raise _bundle_error(
             f"runner count mismatch: got {evaluations} evaluations, {completed} complete, "
             f"and {rejected} rejected"
         )
     print(
-        "Validated 9 signed-document profiles, 22 cases, 58 evaluations, "
-        f"12 complete and 46 rejected; artifact digest {manifest['artifactDigest']}."
+        "Validated 9 signed-document profiles, 22 cases, 62 evaluations, "
+        f"12 complete and 50 rejected; artifact digest {manifest['artifactDigest']}."
     )
 
 
@@ -2315,6 +2479,7 @@ def _load_and_validate_bundle() -> tuple[
     dict[str, Mapping[str, Any]],
     Registry,
 ]:
+    _validate_protocol_uri_contract()
     manifest_schema = _load_fixed_json(
         MANIFEST_SCHEMA_PATH, label="cryptography/manifest.schema.json"
     )
@@ -2364,6 +2529,7 @@ def _load_and_validate_bundle() -> tuple[
     schemas, schema_registry = _validate_profiles(manifest, cache)
     _validate_case_matrix(manifest)
     _validate_timestamp_profile_coverage(manifest, cache)
+    _validate_registry_identifier_faults(manifest, cache)
     _validate_fixture_structures(manifest, cache)
     return manifest, cache, schemas, schema_registry
 
