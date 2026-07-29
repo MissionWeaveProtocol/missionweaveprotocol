@@ -686,6 +686,45 @@ def generate() -> None:
     registry = _make_registry(keys)
     registry_path = _write_json("cryptography/keys/registry-valid.json", registry)
 
+    registry_organization_id_relative_reference = copy.deepcopy(registry)
+    registry_organization_id_relative_reference["organizationId"] = (
+        "organizations/acme"
+    )
+    registry_organization_id_relative_reference_path = _write_json(
+        "cryptography/keys/registry-organization-id-relative-reference.json",
+        registry_organization_id_relative_reference,
+    )
+
+    registry_selected_service_principal_id_iri_only = copy.deepcopy(registry)
+    _find_binding(
+        registry_selected_service_principal_id_iri_only,
+        keys["organization-registry"]["keyId"],
+    )["principal"]["id"] = "https://例え.テスト/services/organization-registry"
+    registry_selected_service_principal_id_iri_only_path = _write_json(
+        "cryptography/keys/registry-selected-service-principal-id-iri-only.json",
+        registry_selected_service_principal_id_iri_only,
+    )
+
+    registry_unrelated_principal_id_malformed_percent = copy.deepcopy(registry)
+    _find_binding(
+        registry_unrelated_principal_id_malformed_percent,
+        keys["security-owner"]["keyId"],
+    )["principal"]["id"] = "urn:missionweaveprotocol:human:security-owner%GG"
+    registry_unrelated_principal_id_malformed_percent_path = _write_json(
+        "cryptography/keys/registry-unrelated-principal-id-malformed-percent.json",
+        registry_unrelated_principal_id_malformed_percent,
+    )
+
+    registry_unrelated_key_id_trailing_line_feed = copy.deepcopy(registry)
+    _find_binding(
+        registry_unrelated_key_id_trailing_line_feed,
+        keys["security-owner"]["keyId"],
+    )["keyId"] += "\n"
+    registry_unrelated_key_id_trailing_line_feed_path = _write_json(
+        "cryptography/keys/registry-unrelated-key-id-trailing-line-feed.json",
+        registry_unrelated_key_id_trailing_line_feed,
+    )
+
     registry_timestamp_casing_offsets = copy.deepcopy(registry)
     timestamp_casing_binding = _find_binding(
         registry_timestamp_casing_offsets, GOLDEN_KEY_ID
@@ -1522,6 +1561,37 @@ def generate() -> None:
             "evaluations": sorted(
                 [
                     _failure_evaluation(
+                        fault_id="registry-organization-id-relative-reference",
+                        document_path=document_paths["command"],
+                        registry_path=registry_organization_id_relative_reference_path,
+                        stage="key-resolution",
+                        wire_code="AUTH_INVALID_SIGNATURE",
+                    ),
+                    _failure_evaluation(
+                        fault_id="registry-selected-service-principal-id-iri-only",
+                        profile_id="agent-card",
+                        basis_case_id="accept.profile-matrix.all-nine",
+                        basis_profile_id="agent-card",
+                        document_path=document_paths["agent-card"],
+                        registry_path=registry_selected_service_principal_id_iri_only_path,
+                        stage="key-resolution",
+                        wire_code="AUTH_INVALID_SIGNATURE",
+                    ),
+                    _failure_evaluation(
+                        fault_id="registry-unrelated-principal-id-malformed-percent",
+                        document_path=document_paths["command"],
+                        registry_path=registry_unrelated_principal_id_malformed_percent_path,
+                        stage="key-resolution",
+                        wire_code="AUTH_INVALID_SIGNATURE",
+                    ),
+                    _failure_evaluation(
+                        fault_id="registry-unrelated-key-id-trailing-line-feed",
+                        document_path=document_paths["command"],
+                        registry_path=registry_unrelated_key_id_trailing_line_feed_path,
+                        stage="key-resolution",
+                        wire_code="AUTH_INVALID_SIGNATURE",
+                    ),
+                    _failure_evaluation(
                         fault_id="key-not-yet-valid",
                         document_path=document_paths["command"],
                         registry_path=registry_not_yet_path,
@@ -1718,8 +1788,8 @@ def generate() -> None:
     if len(cases) != 22:
         raise RuntimeError(f"expected 22 cases, generated {len(cases)}")
     evaluations = sum(len(case["evaluations"]) for case in cases)
-    if evaluations != 58:
-        raise RuntimeError(f"expected 58 evaluations, generated {evaluations}")
+    if evaluations != 62:
+        raise RuntimeError(f"expected 62 evaluations, generated {evaluations}")
 
     manifest_without_digest = {
         "$schema": "https://missionweaveprotocol.dev/cryptography/0.1/manifest.schema.json",
