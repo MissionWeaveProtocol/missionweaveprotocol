@@ -1391,6 +1391,8 @@ def _parse_rfc3339_value(value: str) -> Rfc3339Instant:
 
 _PROTOCOL_URI_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _INVALID_PERCENT_ESCAPE_RE = re.compile(r"%(?![0-9A-Fa-f]{2})")
+_IPV_FUTURE_PREFIX_RE = re.compile(r"^[vV][0-9A-Fa-f]+\.")
+_DEC_OCTET_RE = re.compile(r"^(?:0|[1-9][0-9]{0,2})$")
 
 _STANDARD_FORMAT_CHECKER = FormatChecker()
 PROTOCOL_FORMAT_CHECKER = FormatChecker()
@@ -1404,7 +1406,37 @@ def _is_protocol_uri(value: object) -> bool:
         and all(0x21 <= ord(character) <= 0x7E for character in value)
         and _PROTOCOL_URI_SCHEME_RE.match(value) is not None
         and _INVALID_PERCENT_ESCAPE_RE.search(value) is None
+        and _has_valid_embedded_ipv4_address(value)
         and _STANDARD_FORMAT_CHECKER.conforms(value, "uri")
+    )
+
+
+def _has_valid_embedded_ipv4_address(value: str) -> bool:
+    scheme_end = value.find(":")
+    if value[scheme_end + 1 : scheme_end + 3] != "//":
+        return True
+    authority_start = scheme_end + 3
+    authority_end = len(value)
+    for delimiter in "/?#":
+        candidate = value.find(delimiter, authority_start)
+        if candidate != -1:
+            authority_end = min(authority_end, candidate)
+    host_port = value[authority_start:authority_end].rsplit("@", 1)[-1]
+    if not host_port.startswith("["):
+        return True
+    closing_bracket = host_port.find("]")
+    if closing_bracket == -1:
+        return True
+    literal = host_port[1:closing_bracket]
+    if _IPV_FUTURE_PREFIX_RE.match(literal) is not None:
+        return True
+    tail = literal.rsplit(":", 1)[-1]
+    if "." not in tail:
+        return True
+    octets = tail.split(".")
+    return len(octets) == 4 and all(
+        _DEC_OCTET_RE.fullmatch(octet) is not None and int(octet) <= 255
+        for octet in octets
     )
 
 
@@ -1414,6 +1446,7 @@ def _validate_protocol_uri_contract() -> None:
         "example:/path",
         "urn:example:%E2%82%AC",
         "https://[2001:db8::1]/path",
+        "x://[::ffff:192.168.1.1]/",
         "https://example.com/" + "a" * 513,
     )
     rejected = (
@@ -1424,6 +1457,9 @@ def _validate_protocol_uri_contract() -> None:
         "urn:example:%GG",
         "example:/path\n",
         "https://[not-an-ip]/",
+        "x://[::ffff:192.168.001.1]/",
+        "x://[::ffff:192.168.01.1]/",
+        "x://[::ffff:192.168.1.01]/",
     )
     for value in accepted:
         if not _is_protocol_uri(value):
