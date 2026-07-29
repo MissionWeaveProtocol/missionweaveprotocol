@@ -248,6 +248,7 @@ class EnvelopeResult:
 
 @dataclass(frozen=True)
 class ResolvedKey:
+    organization_id: str
     key_id: str
     principal: dict[str, str]
     algorithm: str
@@ -1388,7 +1389,48 @@ def _parse_rfc3339_value(value: str) -> Rfc3339Instant:
     )
 
 
+_PROTOCOL_URI_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+_INVALID_PERCENT_ESCAPE_RE = re.compile(r"%(?![0-9A-Fa-f]{2})")
+
+_STANDARD_FORMAT_CHECKER = FormatChecker()
 PROTOCOL_FORMAT_CHECKER = FormatChecker()
+
+
+@PROTOCOL_FORMAT_CHECKER.checks("uri")
+def _is_protocol_uri(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and all(0x21 <= ord(character) <= 0x7E for character in value)
+        and _PROTOCOL_URI_SCHEME_RE.match(value) is not None
+        and _INVALID_PERCENT_ESCAPE_RE.search(value) is None
+        and _STANDARD_FORMAT_CHECKER.conforms(value, "uri")
+    )
+
+
+def _validate_protocol_uri_contract() -> None:
+    accepted = (
+        "example:",
+        "example:/path",
+        "urn:example:%E2%82%AC",
+        "https://[2001:db8::1]/path",
+        "https://example.com/" + "a" * 513,
+    )
+    rejected = (
+        "",
+        "relative/path",
+        "1example:path",
+        "https://例え.テスト/",
+        "urn:example:%GG",
+        "example:/path\n",
+        "https://[not-an-ip]/",
+    )
+    for value in accepted:
+        if not _is_protocol_uri(value):
+            raise _bundle_error(f"protocol URI predicate rejects {value!r}")
+    for value in rejected:
+        if _is_protocol_uri(value):
+            raise _bundle_error(f"protocol URI predicate accepts {value!r}")
 
 
 @PROTOCOL_FORMAT_CHECKER.checks("date-time")
@@ -1656,6 +1698,8 @@ def _principal(value: object, *, stage: str, label: str) -> dict[str, str]:
         raise _semantic(stage, f"{label}.type is unsupported")
     if not isinstance(principal["id"], str):
         raise _semantic(stage, f"{label}.id is not a string")
+    if not _is_protocol_uri(principal["id"]):
+        raise _semantic(stage, f"{label}.id is not a protocol URI")
     return {"type": principal["type"], "id": principal["id"]}
 
 
@@ -1947,6 +1991,11 @@ def _resolve_key(raw: bytes, envelope: EnvelopeResult, *, label: str) -> Resolve
     )
     if not isinstance(registry_object["organizationId"], str):
         raise _semantic("key-resolution", "Registry organizationId is not a string")
+    organization_id = registry_object["organizationId"]
+    if not _is_protocol_uri(organization_id):
+        raise _semantic(
+            "key-resolution", "Registry organizationId is not a protocol URI"
+        )
     if (
         not isinstance(registry_object["bindings"], list)
         or not registry_object["bindings"]
@@ -1975,6 +2024,10 @@ def _resolve_key(raw: bytes, envelope: EnvelopeResult, *, label: str) -> Resolve
         key_id = binding["keyId"]
         if not isinstance(key_id, str):
             raise _semantic("key-resolution", f"{prefix}.keyId is not a string")
+        if not _is_protocol_uri(key_id):
+            raise _semantic(
+                "key-resolution", f"{prefix}.keyId is not a protocol URI"
+            )
         principal = _principal(
             binding["principal"], stage="key-resolution", label=f"{prefix}.principal"
         )
@@ -2150,6 +2203,7 @@ def _resolve_key(raw: bytes, envelope: EnvelopeResult, *, label: str) -> Resolve
             "key-resolution", "signing key is revoked at the protected time"
         )
     return ResolvedKey(
+        organization_id=organization_id,
         key_id=envelope.key_id,
         principal=principal,
         algorithm=selected["algorithm"],
@@ -2425,6 +2479,7 @@ def _load_and_validate_bundle() -> tuple[
     dict[str, Mapping[str, Any]],
     Registry,
 ]:
+    _validate_protocol_uri_contract()
     manifest_schema = _load_fixed_json(
         MANIFEST_SCHEMA_PATH, label="cryptography/manifest.schema.json"
     )
