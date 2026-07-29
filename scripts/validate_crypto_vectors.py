@@ -1391,7 +1391,7 @@ def _parse_rfc3339_value(value: str) -> Rfc3339Instant:
 
 _PROTOCOL_URI_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _INVALID_PERCENT_ESCAPE_RE = re.compile(r"%(?![0-9A-Fa-f]{2})")
-_IPV_FUTURE_PREFIX_RE = re.compile(r"^[vV][0-9A-Fa-f]+\.")
+_IPV_FUTURE_RE = re.compile(r"^[vV][0-9A-Fa-f]+\.[A-Za-z0-9._~!$&'()*+,;=:-]+$")
 _DEC_OCTET_RE = re.compile(r"^(?:0|[1-9][0-9]{0,2})$")
 
 _STANDARD_FORMAT_CHECKER = FormatChecker()
@@ -1407,14 +1407,23 @@ def _is_protocol_uri(value: object) -> bool:
         and _PROTOCOL_URI_SCHEME_RE.match(value) is not None
         and _INVALID_PERCENT_ESCAPE_RE.search(value) is None
         and _has_valid_embedded_ipv4_address(value)
-        and _STANDARD_FORMAT_CHECKER.conforms(value, "uri")
+        and _standard_uri_conforms(value)
     )
 
 
-def _has_valid_embedded_ipv4_address(value: str) -> bool:
+def _standard_uri_conforms(value: str) -> bool:
+    bracketed_host = _bracketed_host_literal(value)
+    if bracketed_host is not None:
+        literal_start, literal = bracketed_host
+        if literal.startswith("V") and _IPV_FUTURE_RE.fullmatch(literal) is not None:
+            value = value[:literal_start] + "v" + value[literal_start + 1 :]
+    return _STANDARD_FORMAT_CHECKER.conforms(value, "uri")
+
+
+def _bracketed_host_literal(value: str) -> tuple[int, str] | None:
     scheme_end = value.find(":")
     if value[scheme_end + 1 : scheme_end + 3] != "//":
-        return True
+        return None
     authority_start = scheme_end + 3
     authority_end = len(value)
     for delimiter in "/?#":
@@ -1423,12 +1432,20 @@ def _has_valid_embedded_ipv4_address(value: str) -> bool:
             authority_end = min(authority_end, candidate)
     host_port = value[authority_start:authority_end].rsplit("@", 1)[-1]
     if not host_port.startswith("["):
-        return True
+        return None
     closing_bracket = host_port.find("]")
     if closing_bracket == -1:
+        return None
+    literal_start = authority_end - len(host_port) + 1
+    return literal_start, host_port[1:closing_bracket]
+
+
+def _has_valid_embedded_ipv4_address(value: str) -> bool:
+    bracketed_host = _bracketed_host_literal(value)
+    if bracketed_host is None:
         return True
-    literal = host_port[1:closing_bracket]
-    if _IPV_FUTURE_PREFIX_RE.match(literal) is not None:
+    _, literal = bracketed_host
+    if _IPV_FUTURE_RE.fullmatch(literal) is not None:
         return True
     tail = literal.rsplit(":", 1)[-1]
     if "." not in tail:
@@ -1446,6 +1463,7 @@ def _validate_protocol_uri_contract() -> None:
         "example:/path",
         "urn:example:%E2%82%AC",
         "https://[2001:db8::1]/path",
+        "x://[V01.a]/",
         "x://[::ffff:192.168.1.1]/",
         "https://example.com/" + "a" * 513,
     )
