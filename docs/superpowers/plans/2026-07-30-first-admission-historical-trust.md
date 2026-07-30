@@ -230,7 +230,7 @@ Run from the implementation worktree:
 MW_CRYPTO_VENV=/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust
 MW_CRYPTO_PYTHON=/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python
 test -x "$MW_CRYPTO_VENV/bin/python" || uv venv --python 3.12.13 "$MW_CRYPTO_VENV"
-test "$("$MW_CRYPTO_PYTHON" -c 'import platform; print(platform.python_version())')" = "3.12.13"
+test "$("$MW_CRYPTO_PYTHON" -c 'import platform; print(platform.python_version())')" = "3.12.13" || exit 1
 uv pip install --python "$MW_CRYPTO_PYTHON" --require-hashes --no-deps \
   --only-binary :all: --strict --requirements requirements-cryptography.lock
 ~~~
