@@ -560,8 +560,11 @@ def _build_cases(
             "evaluations": rejected,
         },
     ]
-    if [case["id"] for case in cases] != sorted(case["id"] for case in cases):
+    case_ids = [case["id"] for case in cases]
+    if case_ids != sorted(case_ids):
         raise RuntimeError("Admission case IDs are not lexically sorted")
+    if len(case_ids) != len(set(case_ids)):
+        raise RuntimeError("Admission case IDs are not unique")
     return cases
 
 
