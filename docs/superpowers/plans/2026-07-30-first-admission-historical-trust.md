@@ -4,7 +4,7 @@
 
 **Goal:** Add a normative First-Admission Record, a deterministic 30-evaluation Admission bundle, and equivalent first-admission and historical-replay APIs to all six SDKs without changing the existing six-stage cryptographic verification contract.
 
-**Architecture:** The protocol repository owns the record Schema, structural vectors, Admission manifest, deterministic generator, and executable reference validator. Admission remains a layer above Signed Document verification: every public orchestration path first obtains immutable six-stage evidence, then consults a trusted Admission Log adapter, validates the returned record and authenticated service, and only then returns admitted evidence. After the protocol change is merged, every SDK vendors the same merged Admission tree, pins its digest beside the unchanged cryptography digest, and executes all 30 evaluations through its public Admission API.
+**Architecture:** The protocol repository owns the record Schema, structural vectors, Admission manifest, deterministic generator, and executable reference validator. Admission remains a layer above Signed Document verification: every public orchestration path first obtains immutable six-stage evidence, then consults a trusted Admission Log adapter, validates the returned record and authenticated service, and only then returns admitted evidence. After the protocol change is merged, every SDK vendors the same merged Admission tree, pins its digest beside the unchanged cryptography digest, and executes all 30 evaluations through its public Admission API. Protocol validation uses a hash-locked Python environment outside the worktree so the repository policy scanner sees only repository content.
 
 **Tech Stack:** Python 3.12/jsonschema/uv; TypeScript 5.9/Ajv/Vitest/npm; Go 1.24/santhosh-tekuri jsonschema; Rust 1.85/jsonschema/cargo; Java 21/Jackson/Maven/JUnit; C++20/jsoncons/OpenSSL/CMake/Ninja; GitHub CLI and GitHub Actions.
 
@@ -222,28 +222,29 @@ git -C /Users/lionelmbp/repos/missionweaveprotocol worktree add \
 
 Expected: the new worktree contains the approved spec and plan and is on feat/first-admission-historical-trust.
 
-- [ ] **Step 5: Create the hash-locked validation environment if it is absent**
+- [ ] **Step 5: Create the external hash-locked validation environment if it is absent**
 
 Run from the implementation worktree:
 
 ~~~bash
-test -x .venv-cryptography/bin/python || uv venv --python 3.12.13 .venv-cryptography
-uv pip install --python .venv-cryptography/bin/python --require-hashes --no-deps \
+MW_CRYPTO_VENV=/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust
+test -x "$MW_CRYPTO_VENV/bin/python" || uv venv --python 3.12.13 "$MW_CRYPTO_VENV"
+uv pip install --python "$MW_CRYPTO_VENV/bin/python" --require-hashes --no-deps \
   --only-binary :all: --strict --requirements requirements-cryptography.lock
 ~~~
 
-Expected: dependency installation completes from the committed lock file.
+Expected: dependency installation completes from the committed lock file. Do not create the venv inside the worktree: `scripts/check_repository_policy.py` intentionally scans every worktree file and does not apply Git ignore rules.
 
 - [ ] **Step 6: Establish the unchanged baseline**
 
 Run:
 
 ~~~bash
-.venv-cryptography/bin/python scripts/check_repository_policy.py
-.venv-cryptography/bin/python scripts/validate_protocol.py
-.venv-cryptography/bin/python scripts/generate_crypto_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/check_repository_policy.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/validate_protocol.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/generate_crypto_vectors.py
 git diff --exit-code -- cryptography
-.venv-cryptography/bin/python scripts/validate_crypto_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/validate_crypto_vectors.py
 git status --short --branch
 ~~~
 
@@ -324,7 +325,7 @@ Append these entries to conformance/manifest.json in the existing logical groupi
 Run:
 
 ~~~bash
-.venv-cryptography/bin/python scripts/validate_protocol.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/validate_protocol.py
 ~~~
 
 Expected: FAIL because schemas/first-admission-record.schema.json does not exist or the schema count contract is still 21.
@@ -435,7 +436,7 @@ Retain the existing unlisted-vector and duplicate-path checks.
 Run:
 
 ~~~bash
-.venv-cryptography/bin/python scripts/validate_protocol.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/validate_protocol.py
 ~~~
 
 Expected: Validated 22 schemas and 58 conformance vectors.
@@ -844,9 +845,9 @@ if actual != expected:
 Run:
 
 ~~~bash
-.venv-cryptography/bin/python scripts/generate_admission_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/generate_admission_vectors.py
 git diff -- admission schemas/first-admission-record.schema.json > /tmp/mw-admission-first.diff
-.venv-cryptography/bin/python scripts/generate_admission_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/generate_admission_vectors.py
 git diff -- admission schemas/first-admission-record.schema.json > /tmp/mw-admission-second.diff
 cmp /tmp/mw-admission-first.diff /tmp/mw-admission-second.diff
 ~~~
@@ -924,7 +925,7 @@ Change `_run_signed_evaluation` to assign `result = verify_signed_document_bytes
 Run:
 
 ~~~bash
-.venv-cryptography/bin/python scripts/validate_crypto_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/validate_crypto_vectors.py
 git diff --exit-code -- cryptography
 ~~~
 
@@ -967,7 +968,7 @@ REQUIRED_PUBLIC_PATHS = {
 Run:
 
 ~~~bash
-.venv-cryptography/bin/python scripts/validate_admission_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/validate_admission_vectors.py
 ~~~
 
 Expected: FAIL because the Admission flow functions are not defined.
@@ -1140,7 +1141,7 @@ raise AdmissionFailure(
 Run:
 
 ~~~bash
-.venv-cryptography/bin/python scripts/validate_admission_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/validate_admission_vectors.py
 ~~~
 
 Expected:
@@ -1154,12 +1155,12 @@ Validated Admission bundle: 19 artifacts, 5 cases, 30 evaluations, 12 complete a
 Run:
 
 ~~~bash
-.venv-cryptography/bin/python scripts/generate_crypto_vectors.py
-.venv-cryptography/bin/python scripts/generate_admission_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/generate_crypto_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/generate_admission_vectors.py
 git status --porcelain=v1 --untracked-files=all > /tmp/mw-generated-status
 sed -n '1,200p' /tmp/mw-generated-status
-.venv-cryptography/bin/python scripts/validate_crypto_vectors.py
-.venv-cryptography/bin/python scripts/validate_admission_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/validate_crypto_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/validate_admission_vectors.py
 ~~~
 
 Expected: only intentional source/documentation changes appear; no generated artifact changes appear after regeneration.
@@ -1232,9 +1233,9 @@ scope exclusions
 Include these exact commands:
 
 ~~~bash
-.venv-cryptography/bin/python scripts/generate_admission_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/generate_admission_vectors.py
 git diff --exit-code -- admission
-.venv-cryptography/bin/python scripts/validate_admission_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/validate_admission_vectors.py
 ~~~
 
 - [ ] **Step 4: Preserve the cryptography README boundary**
@@ -1287,14 +1288,14 @@ Append to .github/workflows/validate.yml:
 Run:
 
 ~~~bash
-.venv-cryptography/bin/python scripts/check_repository_policy.py
-.venv-cryptography/bin/python scripts/validate_protocol.py
-.venv-cryptography/bin/python scripts/generate_crypto_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/check_repository_policy.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/validate_protocol.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/generate_crypto_vectors.py
 git diff --exit-code -- cryptography
-.venv-cryptography/bin/python scripts/validate_crypto_vectors.py
-.venv-cryptography/bin/python scripts/generate_admission_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/validate_crypto_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/generate_admission_vectors.py
 git diff --exit-code -- admission
-.venv-cryptography/bin/python scripts/validate_admission_vectors.py
+/Users/lionelmbp/.config/superpowers/venvs/missionweaveprotocol-first-admission-historical-trust/bin/python scripts/validate_admission_vectors.py
 git diff --check
 ~~~
 
