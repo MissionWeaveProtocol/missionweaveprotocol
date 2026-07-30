@@ -6,6 +6,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -97,17 +99,81 @@ def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _write_json(relative: str, document: Any) -> str:
-    path = ROOT / relative
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _json_bytes(document: Any) -> bytes:
     content = json.dumps(
         document,
         ensure_ascii=False,
         indent=2,
         allow_nan=False,
     )
-    path.write_text(content + "\n", encoding="utf-8")
-    return relative
+    return (content + "\n").encode("utf-8")
+
+
+def _stage_file(target: Path, content: bytes) -> Path:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{target.name}.",
+        suffix=".tmp",
+        dir=target.parent,
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary_path.chmod(0o644)
+    except BaseException:
+        temporary_path.unlink(missing_ok=True)
+        raise
+    return temporary_path
+
+
+def _write_files_atomically(files: dict[str, bytes]) -> None:
+    manifest_path = "admission/manifest.json"
+    ordered_paths = sorted(path for path in files if path != manifest_path)
+    if manifest_path in files:
+        ordered_paths.append(manifest_path)
+
+    targets = {relative: ROOT / relative for relative in ordered_paths}
+    originals = {
+        relative: target.read_bytes() if target.is_file() else None
+        for relative, target in targets.items()
+    }
+    staged: dict[str, Path] = {}
+    try:
+        for relative in ordered_paths:
+            staged[relative] = _stage_file(targets[relative], files[relative])
+
+        committed: list[str] = []
+        try:
+            for relative in ordered_paths:
+                os.replace(staged[relative], targets[relative])
+                committed.append(relative)
+        except BaseException as error:
+            rollback_errors = []
+            for relative in reversed(committed):
+                target = targets[relative]
+                original = originals[relative]
+                try:
+                    if original is None:
+                        target.unlink(missing_ok=True)
+                    else:
+                        replacement = _stage_file(target, original)
+                        try:
+                            os.replace(replacement, target)
+                        finally:
+                            replacement.unlink(missing_ok=True)
+                except BaseException as rollback_error:
+                    rollback_errors.append(f"{relative}: {rollback_error}")
+            if rollback_errors:
+                raise RuntimeError(
+                    "Admission output rollback failed: " + "; ".join(rollback_errors)
+                ) from error
+            raise
+    finally:
+        for temporary_path in staged.values():
+            temporary_path.unlink(missing_ok=True)
 
 
 def _sha256(content: bytes) -> str:
@@ -207,22 +273,23 @@ def _profile_evaluations(
     return selected
 
 
-def _write_records(
+def _build_records(
     profile_evaluations: dict[str, dict[str, Any]],
 ) -> tuple[
     dict[str, dict[str, Any]],
     dict[str, str],
     dict[str, str],
+    dict[str, bytes],
 ]:
     records: dict[str, dict[str, Any]] = {}
     valid_paths: dict[str, str] = {}
+    generated_files: dict[str, bytes] = {}
     for profile_id in PROFILE_IDS:
         record = _record(profile_id, profile_evaluations[profile_id]["expect"]["verified"])
         records[profile_id] = record
-        valid_paths[profile_id] = _write_json(
-            f"admission/records/valid/{profile_id}.json",
-            record,
-        )
+        path = f"admission/records/valid/{profile_id}.json"
+        valid_paths[profile_id] = path
+        generated_files[path] = _json_bytes(record)
 
     command = records["command"]
     invalid_mutations: dict[str, tuple[str, Any]] = {
@@ -271,15 +338,14 @@ def _write_records(
             raise RuntimeError(
                 f"invalid record {name} changed fields {sorted(changed_fields)!r}"
             )
-        invalid_paths[name] = _write_json(
-            f"admission/records/invalid/{name}.json",
-            invalid,
-        )
+        path = f"admission/records/invalid/{name}.json"
+        invalid_paths[name] = path
+        generated_files[path] = _json_bytes(invalid)
 
-    return records, valid_paths, invalid_paths
+    return records, valid_paths, invalid_paths, generated_files
 
 
-def _write_later_revocation_registry() -> str:
+def _build_later_revocation_registry() -> tuple[str, bytes]:
     registry = copy.deepcopy(_load_json(CRYPTOGRAPHY_REGISTRY_PATH))
     if not isinstance(registry, dict):
         raise RuntimeError("cryptography Registry fixture is not an object")
@@ -309,10 +375,8 @@ def _write_later_revocation_registry() -> str:
             "revokedAt": "2026-07-15T01:00:00Z",
         }
     )
-    return _write_json(
-        "admission/registries/registry-later-revocation.json",
-        registry,
-    )
+    path = "admission/registries/registry-later-revocation.json"
+    return path, _json_bytes(registry)
 
 
 def _base_evaluation(
@@ -568,14 +632,20 @@ def _build_cases(
     return cases
 
 
-def _artifact_index(paths: list[str]) -> list[dict[str, Any]]:
+def _artifact_index(
+    paths: list[str],
+    generated_files: dict[str, bytes],
+) -> list[dict[str, Any]]:
     normalized_paths = sorted(set(paths))
     if len(normalized_paths) != len(paths):
         raise RuntimeError("Admission artifact paths are not unique")
     artifacts = []
     for relative in normalized_paths:
-        path = ROOT / relative
-        content = path.read_bytes()
+        content = (
+            generated_files[relative]
+            if relative in generated_files
+            else (ROOT / relative).read_bytes()
+        )
         artifacts.append(
             {
                 "path": relative,
@@ -586,16 +656,20 @@ def _artifact_index(paths: list[str]) -> list[dict[str, Any]]:
     return artifacts
 
 
-def _assert_fixture_closure(expected_paths: set[str]) -> None:
+def _assert_fixture_closure(
+    expected_paths: set[str],
+    *,
+    allow_missing: bool,
+) -> None:
     actual_paths = {
         path.relative_to(ROOT).as_posix()
         for directory in (VALID_RECORD_ROOT, INVALID_RECORD_ROOT, REGISTRY_ROOT)
         for path in directory.rglob("*")
         if path.is_file()
     }
-    if actual_paths != expected_paths:
-        unexpected = sorted(actual_paths - expected_paths)
-        missing = sorted(expected_paths - actual_paths)
+    unexpected = sorted(actual_paths - expected_paths)
+    missing = sorted(expected_paths - actual_paths)
+    if unexpected or (missing and not allow_missing):
         raise RuntimeError(
             "Admission generated fixture closure mismatch: "
             f"unexpected={unexpected!r}, missing={missing!r}"
@@ -621,18 +695,20 @@ def generate() -> None:
     ):
         raise RuntimeError("cryptography artifact digest does not match the frozen pin")
 
-    for directory in (VALID_RECORD_ROOT, INVALID_RECORD_ROOT, REGISTRY_ROOT):
-        directory.mkdir(parents=True, exist_ok=True)
-
     profile_evaluations = _profile_evaluations(cryptography_manifest)
-    records, valid_paths, invalid_paths = _write_records(profile_evaluations)
-    later_revocation_registry = _write_later_revocation_registry()
+    records, valid_paths, invalid_paths, generated_files = _build_records(
+        profile_evaluations
+    )
+    later_revocation_registry, later_revocation_bytes = (
+        _build_later_revocation_registry()
+    )
+    generated_files[later_revocation_registry] = later_revocation_bytes
     expected_fixture_paths = {
         *valid_paths.values(),
         *invalid_paths.values(),
         later_revocation_registry,
     }
-    _assert_fixture_closure(expected_fixture_paths)
+    _assert_fixture_closure(expected_fixture_paths, allow_missing=True)
     cases = _build_cases(
         profile_evaluations,
         records,
@@ -649,7 +725,7 @@ def generate() -> None:
         "schemas/common.schema.json",
         "schemas/first-admission-record.schema.json",
     ]
-    artifacts = _artifact_index(artifact_paths)
+    artifacts = _artifact_index(artifact_paths, generated_files)
     case_count = len(cases)
     evaluation_count = sum(len(case["evaluations"]) for case in cases)
     complete_count = sum(
@@ -706,7 +782,8 @@ def generate() -> None:
     }
     manifest = copy.deepcopy(manifest_without_digest)
     manifest["artifactDigest"] = _sha256(rfc8785.dumps(manifest_without_digest))
-    _write_json("admission/manifest.json", manifest)
+    generated_files["admission/manifest.json"] = _json_bytes(manifest)
+    _write_files_atomically(generated_files)
 
     print(
         "Generated MissionWeaveProtocol Admission bundle: "
