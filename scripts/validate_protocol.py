@@ -18,6 +18,8 @@ SCHEMA_ROOT = ROOT / "schemas"
 VECTOR_ROOT = ROOT / "conformance" / "vectors"
 MANIFEST_PATH = ROOT / "conformance" / "manifest.json"
 SCHEMA_ID_BASE = "https://missionweaveprotocol.dev/schemas/0.1/"
+EXPECTED_SCHEMA_COUNT = 22
+EXPECTED_VECTOR_COUNT = 58
 
 
 class ProtocolValidationError(RuntimeError):
@@ -55,8 +57,10 @@ def _repository_path(value: object, *, parent: Path, field: str) -> Path:
 
 def _load_schemas() -> tuple[dict[Path, dict[str, Any]], Registry]:
     schema_paths = sorted(SCHEMA_ROOT.glob("*.json"))
-    if len(schema_paths) != 21:
-        raise ProtocolValidationError(f"expected 21 schemas, found {len(schema_paths)}")
+    if len(schema_paths) != EXPECTED_SCHEMA_COUNT:
+        raise ProtocolValidationError(
+            f"expected {EXPECTED_SCHEMA_COUNT} schemas, found {len(schema_paths)}"
+        )
 
     schemas: dict[Path, dict[str, Any]] = {}
     resources: list[tuple[str, Resource[Any]]] = []
@@ -98,9 +102,13 @@ def _load_manifest() -> list[dict[str, Any]]:
 
 def _validate_vectors(schemas: dict[Path, dict[str, Any]], registry: Registry) -> None:
     manifest = _load_manifest()
+    if len(manifest) != EXPECTED_VECTOR_COUNT:
+        raise ProtocolValidationError(
+            f"expected {EXPECTED_VECTOR_COUNT} conformance vectors, found {len(manifest)}"
+        )
+
     names: set[str] = set()
     instances: set[Path] = set()
-    passed = 0
 
     for index, item in enumerate(manifest, start=1):
         name = item.get("name")
@@ -151,7 +159,6 @@ def _validate_vectors(schemas: dict[Path, dict[str, Any]], registry: Registry) -
             raise ProtocolValidationError(
                 f"conformance case {name!r} expected {expectation} but was {result}"
             )
-        passed += 1
 
     vector_files = {path.resolve() for path in VECTOR_ROOT.rglob("*.json") if path.is_file()}
     unlisted = sorted(path.relative_to(ROOT) for path in vector_files - instances)
@@ -164,7 +171,10 @@ def _validate_vectors(schemas: dict[Path, dict[str, Any]], registry: Registry) -
             details.append("missing vectors: " + ", ".join(map(str, missing)))
         raise ProtocolValidationError("; ".join(details))
 
-    print(f"Validated 21 schemas and {passed} conformance vectors.")
+    print(
+        f"Validated {EXPECTED_SCHEMA_COUNT} schemas and "
+        f"{EXPECTED_VECTOR_COUNT} conformance vectors."
+    )
 
 
 def main() -> int:
