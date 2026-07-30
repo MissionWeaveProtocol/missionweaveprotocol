@@ -463,6 +463,24 @@ class FixtureStore:
                 f"six-stage verifier at {error.stage}: {error.detail}"
             ) from error
 
+    def _authenticated_record(
+        self,
+        evaluation: Mapping[str, Any],
+        outcome: Mapping[str, Any],
+    ) -> AuthenticatedRecord:
+        if (
+            evaluation["profileId"] == "event"
+            and outcome["record"] == evaluation["document"]
+        ):
+            raise AdmissionFailure(
+                "event-self-anchoring",
+                "a Signed Event cannot authenticate its own First-Admission Record",
+            )
+        return AuthenticatedRecord(
+            record_bytes=self.bundle.read(outcome["record"]),
+            authenticated_service=dict(outcome["authenticatedService"]),
+        )
+
     def lookup(
         self, evaluation: Mapping[str, Any], verified: VerifiedResult
     ) -> LookupResult:
@@ -470,19 +488,8 @@ class FixtureStore:
         outcome = evaluation["lookup"]
         status = outcome["status"]
         if status == "found":
-            if (
-                verified.document_kind == "event"
-                and outcome["record"] == evaluation["document"]
-            ):
-                raise AdmissionFailure(
-                    "event-self-anchoring",
-                    "a Signed Event cannot authenticate its own First-Admission Record",
-                )
             return LookupResult(
-                found=AuthenticatedRecord(
-                    record_bytes=self.bundle.read(outcome["record"]),
-                    authenticated_service=dict(outcome["authenticatedService"]),
-                ),
+                found=self._authenticated_record(evaluation, outcome),
                 authoritative_absence=False,
                 reason="record-missing",
             )
@@ -516,15 +523,12 @@ class FixtureStore:
             )
         status = outcome["status"]
         if status in {"committed", "existing"}:
-            returned = self.bundle.read(outcome["record"])
-            if status == "committed" and returned != candidate_bytes:
+            authenticated = self._authenticated_record(evaluation, outcome)
+            if status == "committed" and authenticated.record_bytes != candidate_bytes:
                 raise BundleValidationError(
                     f"evaluation {evaluation['id']} committed bytes differ from candidate"
                 )
-            return AuthenticatedRecord(
-                record_bytes=returned,
-                authenticated_service=dict(outcome["authenticatedService"]),
-            )
+            return authenticated
         reasons = {
             "conflict": "record-conflict",
             "unauthenticated": "log-authentication-failed",
@@ -699,13 +703,9 @@ def verify_historical_admission(
 def _expected_calls(evaluation: Mapping[str, Any]) -> tuple[int, int, int]:
     if evaluation["mode"] == "historical-replay":
         return (1, 0, 0)
-    if evaluation["lookup"]["status"] == "found":
+    if evaluation["lookup"]["status"] != "authoritative-absence":
         return (1, 0, 0)
-    if evaluation["id"].startswith("trusted-time-") or evaluation["id"] == (
-        "malformed-trusted-time"
-    ):
-        return (1, 1, 0)
-    return (1, 1, 1)
+    return (1, 1, int(evaluation["append"] is not None))
 
 
 def _assert_calls(evaluation: Mapping[str, Any], fixtures: FixtureStore) -> None:
