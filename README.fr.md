@@ -30,10 +30,12 @@ Ce dépôt est la source de vérité pour l’ensemble versionné des artefacts 
 
 - [spécification normative](spec/PROTOCOL.md) ;
 - [glossaire du protocole](CONTEXT.md) ;
-- [21 schémas JSON](schemas/README.md) ;
+- [22 schémas JSON normatifs](schemas/README.md) ;
 - [vecteurs de conformité valides et invalides](conformance/manifest.json) ;
 - [ensemble cryptographique de 22 cas pour les neuf profils de schéma du Signed Document
   Verification Profile](cryptography/README.md) ;
+- [ensemble de première admission et de confiance historique avec 5 cas et 30
+  évaluations](admission/README.md) ;
 - [ressources de marque](assets/brand/).
 
 Les implémentations doivent fixer une version publiée ou un commit du protocole. Elles peuvent
@@ -68,18 +70,21 @@ d’exécution.
 
 ## Conformité
 
-Le manifeste contient actuellement 56 cas : 26 documents attendus comme valides et 30 attendus
-comme invalides. La conformité structurelle aux schémas est nécessaire, mais insuffisante ; les
+Le manifeste structurel contient 58 vecteurs : 27 documents attendus comme valides et 31 attendus comme
+invalides. La conformité structurelle aux schémas est nécessaire, mais insuffisante ; les
 implémentations doivent également appliquer les règles de machine à états, d’ordonnancement,
 d’epoch, d’Execution Lease, de budget, de hiérarchie, de signature et d’autorisation définies dans
 la spécification.
 
-Le manifeste cryptographique indépendant contient 22 cas couvrant les neuf profils de schéma du
-Signed Document Verification Profile. Sa réussite démontre la conformité aux évaluations déclarées
-pour les six étapes de vérification cryptographique de la section 6.4 ; elle ne démontre ni la
-validation du First-Admission Record ou de la confiance historique, ni la fraîcheur des Command ou
-le contrôle du décalage d’horloge, ni l’autorisation du signataire selon son rôle et les politiques
-applicables.
+Le manifeste cryptographique indépendant contient 22 cas et 62 évaluations couvrant les neuf
+profils de schéma du Signed Document Verification Profile. Sa réussite démontre la conformité aux
+évaluations déclarées pour les six étapes de vérification cryptographique de la section 6.4.
+
+Le manifeste Admission séparé contient 5 cas et 30 évaluations pour le First-Admission Record et la
+confiance historique, au-dessus de la vérification cryptographique. Admission reste distinct des
+six étapes cryptographiques. Aucun des deux ensembles ne démontre la fraîcheur ou le contrôle du
+décalage d’horloge des Command, ni l’autorisation du signataire ; ces vérifications restent hors de
+ce périmètre.
 
 L’implémentation Python peut exécuter directement les vecteurs de ce dépôt :
 
@@ -95,10 +100,11 @@ python -m pip install --require-hashes --no-deps --only-binary=:all: \
 python scripts/check_repository_policy.py
 python scripts/validate_protocol.py
 python scripts/validate_crypto_vectors.py
+python scripts/validate_admission_vectors.py
 ```
 
 ## Licence
 
-La spécification, les schémas, les vecteurs de conformité, les vecteurs cryptographiques et les
-ressources de marque sont placés sous licence [Apache-2.0](LICENSE). Cette licence n’accorde aucun
-droit sur les marques.
+La spécification, les schémas, les vecteurs de conformité, cryptographiques et d’Admission, ainsi
+que les ressources de marque sont placés sous licence [Apache-2.0](LICENSE). Cette licence
+n’accorde aucun droit sur les marques.

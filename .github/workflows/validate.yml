@@ -68,3 +68,23 @@ jobs:
           sed -n '1,200p' /tmp/generated-artifact-status
           test ! -s /tmp/generated-artifact-status
       - run: python scripts/validate_crypto_vectors.py
+
+  admission-artifacts:
+    name: First-admission and historical-trust vectors
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.13"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.21"
+          enable-cache: true
+          cache-dependency-glob: requirements-cryptography.lock
+      - run: >-
+          uv pip install --system --require-hashes --no-deps --only-binary :all: --strict
+          --requirements requirements-cryptography.lock
+      - run: python scripts/generate_admission_vectors.py
+      - run: git diff --exit-code -- admission
+      - run: python scripts/validate_admission_vectors.py

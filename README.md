@@ -29,10 +29,12 @@ This repository is the source of truth for the versioned protocol artifact bundl
 
 - [normative specification](spec/PROTOCOL.md);
 - [protocol glossary](CONTEXT.md);
-- [21 JSON Schemas](schemas/README.md);
+- [22 normative JSON Schemas](schemas/README.md);
 - [valid and invalid conformance vectors](conformance/manifest.json);
 - [signed-document cryptography bundle covering nine schema profiles with 22
   cases](cryptography/README.md);
+- [first-admission and historical-trust bundle with 5 cases and 30
+  evaluations](admission/README.md);
 - [brand assets](assets/brand/).
 
 Implementations must pin a released protocol version or commit. They may vendor the schemas and
@@ -63,16 +65,20 @@ conformance.
 
 ## Conformance
 
-The manifest currently contains 56 cases: 26 expected-valid documents and 30 expected-invalid
+The structural manifest contains 58 vectors: 27 expected-valid documents and 31 expected-invalid
 documents. Structural schema conformance is necessary but not sufficient; implementations must
 also enforce the state-machine, ordering, epoch, lease, budget, hierarchy, signature, and
 authorization rules in the specification.
 
-The independent cryptography manifest contains 22 cases covering all nine schema profiles in the
-Signed Document Verification Profile. Passing it demonstrates conformance to the declared
-evaluations across the six cryptographic verification stages in Section 6.4; it does not prove
-First-Admission Record or historical-trust validation, Command freshness or clock-skew
-enforcement, or signer authorization under applicable role and policy.
+The independent cryptography manifest contains 22 cases and 62 evaluations covering all nine
+schema profiles in the Signed Document Verification Profile. Passing it demonstrates conformance
+to the declared evaluations across the six cryptographic verification stages in Section 6.4.
+
+The separate Admission manifest contains 5 cases and 30 evaluations for First-Admission Record and
+historical-trust behavior layered above cryptographic verification. Admission remains separate
+from the six cryptographic stages. Neither bundle proves Command freshness or clock-skew
+enforcement or signer authorization under applicable role and policy; those checks remain outside
+this slice.
 
 The Python implementation can run this repository's vectors directly:
 
@@ -88,9 +94,10 @@ python -m pip install --require-hashes --no-deps --only-binary=:all: \
 python scripts/check_repository_policy.py
 python scripts/validate_protocol.py
 python scripts/validate_crypto_vectors.py
+python scripts/validate_admission_vectors.py
 ```
 
 ## License
 
-The specification, schemas, conformance and cryptography vectors, and brand assets are licensed
-under [Apache-2.0](LICENSE). The license does not grant trademark rights.
+The specification, schemas, conformance vectors, cryptography vectors, Admission vectors, and
+brand assets are licensed under [Apache-2.0](LICENSE). The license does not grant trademark rights.

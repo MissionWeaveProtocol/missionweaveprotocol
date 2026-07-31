@@ -262,6 +262,7 @@ class ResolvedKey:
 @dataclass(frozen=True)
 class VerifiedResult:
     document: dict[str, Any]
+    document_kind: str
     envelope: EnvelopeResult
     key: ResolvedKey
     signing_bytes: bytes
@@ -2297,6 +2298,36 @@ def _signature_stage(
         raise _semantic("signature", "Ed25519 signature does not verify") from error
 
 
+def verify_signed_document_bytes(
+    *,
+    profile: Mapping[str, Any],
+    document_bytes: bytes,
+    registry_bytes: bytes,
+    schemas: Mapping[str, Mapping[str, Any]],
+    schema_registry: Registry,
+    document_label: str,
+    registry_label: str,
+) -> VerifiedResult:
+    document = _parse_document(document_bytes, label=document_label)
+    _schema_stage(
+        document,
+        schema=schemas[profile["schema"]],
+        registry=schema_registry,
+    )
+    envelope = _signature_envelope(document, profile)
+    key = _resolve_key(registry_bytes, envelope, label=registry_label)
+    signing_bytes, signing_hash = _canonicalization_stage(document)
+    _signature_stage(signing_bytes, envelope, key)
+    return VerifiedResult(
+        document=document,
+        document_kind=profile["profileId"],
+        envelope=envelope,
+        key=key,
+        signing_bytes=signing_bytes,
+        signing_hash=signing_hash,
+    )
+
+
 def _validate_signing_key(
     raw: bytes,
     *,
@@ -2402,18 +2433,15 @@ def _run_signed_evaluation(
     expected_wire = expected["wireCode"]
     profile = profiles[evaluation["profileId"]]
     try:
-        document = _parse_document(
-            cache[evaluation["document"]], label=evaluation["document"]
+        result = verify_signed_document_bytes(
+            profile=profile,
+            document_bytes=cache[evaluation["document"]],
+            registry_bytes=cache[evaluation["registry"]],
+            schemas=schemas,
+            schema_registry=schema_registry,
+            document_label=evaluation["document"],
+            registry_label=evaluation["registry"],
         )
-        _schema_stage(
-            document, schema=schemas[profile["schema"]], registry=schema_registry
-        )
-        envelope = _signature_envelope(document, profile)
-        key = _resolve_key(
-            cache[evaluation["registry"]], envelope, label=evaluation["registry"]
-        )
-        signing_bytes, signing_hash = _canonicalization_stage(document)
-        _signature_stage(signing_bytes, envelope, key)
     except SemanticFailure as failure:
         if expected_stage == "complete":
             raise _bundle_error(
@@ -2436,13 +2464,6 @@ def _run_signed_evaluation(
         raise _bundle_error(
             f"case {case_id!r} expected failure at {expected_stage!r} but verification completed"
         )
-    result = VerifiedResult(
-        document=document,
-        envelope=envelope,
-        key=key,
-        signing_bytes=signing_bytes,
-        signing_hash=signing_hash,
-    )
     _validate_signing_key(
         cache[evaluation["signingKey"]],
         result=result,

@@ -33,10 +33,12 @@ Protokollartefakt-Bündel:
 
 - [normative Spezifikation](spec/PROTOCOL.md);
 - [Protokollglossar](CONTEXT.md);
-- [21 JSON-Schemata](schemas/README.md);
+- [22 normative JSON-Schemata](schemas/README.md);
 - [gültige und ungültige Konformitätsvektoren](conformance/manifest.json);
 - [Kryptografiebündel mit 22 Fällen für die neun Schemaprofile des Signed Document Verification
   Profile](cryptography/README.md);
+- [First-Admission- und Historical-Trust-Bündel mit 5 Fällen und 30
+  Auswertungen](admission/README.md);
 - [Markenressourcen](assets/brand/).
 
 Implementierungen müssen eine veröffentlichte Protokollversion oder einen Commit
@@ -76,18 +78,21 @@ Runtime-Konformität.
 
 ## Konformität
 
-Das Manifest enthält derzeit 56 Fälle: 26 als gültig erwartete Dokumente und 30
+Das strukturelle Manifest enthält 58 Vektoren: 27 als gültig erwartete Dokumente und 31
 als ungültig erwartete Dokumente. Strukturelle Schema-Konformität ist notwendig,
 aber nicht ausreichend; Implementierungen müssen außerdem die Regeln der
 Spezifikation zu Zustandsmaschine, Reihenfolge, Epoch, Lease, Budget, Hierarchie,
 Signatur und Autorisierung durchsetzen.
 
-Das unabhängige Kryptografie-Manifest enthält 22 Fälle für die neun Schemaprofile des Signed
-Document Verification Profile. Sein Bestehen weist die Konformität mit den deklarierten
-Auswertungen über die sechs kryptografischen Prüfschritte aus Abschnitt 6.4 nach; es weist weder
-die Validierung des First-Admission Record oder des historischen Vertrauens noch die Aktualitäts-
-oder Uhrabweichungsprüfung für Command oder die Autorisierung des Unterzeichners gemäß geltender
-Rolle und Richtlinie nach.
+Das unabhängige Kryptografie-Manifest enthält 22 Fälle und 62 Auswertungen für die neun
+Schemaprofile des Signed Document Verification Profile. Sein Bestehen weist die Konformität mit den
+deklarierten Auswertungen über die sechs kryptografischen Prüfschritte aus Abschnitt 6.4 nach.
+
+Das getrennte Admission-Manifest enthält 5 Fälle und 30 Auswertungen für First-Admission Record und
+historisches Vertrauen oberhalb der kryptografischen Verifikation. Admission bleibt von den sechs
+kryptografischen Prüfschritten getrennt. Weder dieses noch das Kryptografiebündel weist die
+Aktualitäts- oder Uhrabweichungsprüfung für Command oder die Autorisierung des Unterzeichners nach;
+diese Prüfungen liegen außerhalb dieses Slices.
 
 Die Python-Implementierung kann die Vektoren dieses Repositorys direkt ausführen:
 
@@ -103,9 +108,10 @@ python -m pip install --require-hashes --no-deps --only-binary=:all: \
 python scripts/check_repository_policy.py
 python scripts/validate_protocol.py
 python scripts/validate_crypto_vectors.py
+python scripts/validate_admission_vectors.py
 ```
 
 ## Lizenz
 
-Spezifikation, Schemas, Konformitäts- und Kryptografievektoren sowie Markenressourcen sind unter
-[Apache-2.0](LICENSE) lizenziert. Die Lizenz gewährt keine Markenrechte.
+Spezifikation, Schemas, Konformitäts-, Kryptografie- und Admission-Vektoren sowie Markenressourcen
+sind unter [Apache-2.0](LICENSE) lizenziert. Die Lizenz gewährt keine Markenrechte.

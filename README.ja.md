@@ -30,10 +30,11 @@ Organization が、アイデンティティ、ポリシー、認可、永続的�
 
 - [規範仕様](spec/PROTOCOL.md)
 - [プロトコル用語集](CONTEXT.md)
-- [21 個の JSON Schema](schemas/README.md)
+- [22 個の規範 JSON Schema](schemas/README.md)
 - [妥当および不妥当な適合性ベクトル](conformance/manifest.json)
 - [Signed Document Verification Profile の 9 種類のスキーマプロファイルを網羅する、
   22 件のケースを含む暗号ベクトル集](cryptography/README.md)
+- [5 件のケースと 30 件の評価を含む初回受け入れ・履歴的信頼ベクトル集](admission/README.md)
 - [ブランドアセット](assets/brand/)
 
 実装は、リリース済みのプロトコルバージョンまたはコミットを固定しなければなりません。
@@ -63,16 +64,20 @@ Python は完全なリファレンスランタイムです。Go、TypeScript、J
 
 ## 適合性
 
-現在のマニフェストには 56 件のケースが含まれます。内訳は、妥当と期待される文書 26 件と、
-不妥当と期待される文書 30 件です。構造上の Schema 適合性は必要条件ですが、十分条件では
+構造マニフェストには 58 件の構造ベクトルが含まれます。内訳は、妥当と期待される文書 27 件と、
+不妥当と期待される文書 31 件です。構造上の Schema 適合性は必要条件ですが、十分条件では
 ありません。実装は、仕様に定める状態機械、順序付け、エポック、リース、予算、階層、署名、
 および認可の規則も適用しなければなりません。
 
 独立した暗号マニフェストには、Signed Document Verification Profile の 9 種類すべての
-スキーマプロファイルを網羅する 22 件のケースが含まれます。このテストパッケージへの合格は、
-第 6.4 節の 6 段階の暗号検証について、宣言された評価項目への適合を示すにとどまります。
-First-Admission Record と履歴的信頼の検証、Command の鮮度検査と時刻ずれ制約の適用、
-および署名者に適用される役割とポリシーに基づく認可は証明されません。
+スキーマプロファイルを網羅する 22 件のケースと 62 件の評価が含まれます。このテスト
+パッケージへの合格は、第 6.4 節の 6 段階の暗号検証について、宣言された評価項目への適合を
+示します。
+
+独立した Admission マニフェストには、First-Admission Record と履歴的信頼のための 5 件の
+ケースと 30 件の評価が含まれます。Admission は 6 段階の暗号検証とは別の層です。いずれの
+ベクトル集も Command の鮮度検査と時刻ずれ制約、または署名者の認可を証明しません。これらの
+検査は本スライスの範囲外です。
 
 Python 実装から、本リポジトリのベクトルを直接実行できます。
 
@@ -88,9 +93,10 @@ python -m pip install --require-hashes --no-deps --only-binary=:all: \
 python scripts/check_repository_policy.py
 python scripts/validate_protocol.py
 python scripts/validate_crypto_vectors.py
+python scripts/validate_admission_vectors.py
 ```
 
 ## ライセンス
 
-仕様、Schema、適合性ベクトル、暗号ベクトル、およびブランドアセットには、
+仕様、Schema、適合性ベクトル、暗号ベクトル、Admission ベクトル、およびブランドアセットには、
 [Apache-2.0](LICENSE) が適用されます。このライセンスは商標権を付与しません。

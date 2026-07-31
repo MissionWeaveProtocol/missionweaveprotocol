@@ -1,8 +1,11 @@
 # MissionWeaveProtocol 0.1 JSON Schemas
 
-These 21 files are the normative JSON Schema Draft 2020-12 definitions for
+These 22 files are the normative JSON Schema Draft 2020-12 definitions for
 MissionWeaveProtocol 0.1. Wire property names are lowerCamelCase. Core objects reject unknown
 properties; approved Extension Profile data is carried only in explicit `extensions` members.
+
+The First-Admission Record is durable protocol metadata, not a Signed Document. It binds trusted
+admission facts without carrying a signature or acting as its own trust anchor.
 
 Schema identifiers use `https://missionweaveprotocol.dev/schemas/0.1/`. A validator must
 register every schema in this directory by its `$id` before resolving references. The
