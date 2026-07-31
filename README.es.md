@@ -31,10 +31,12 @@ Este repositorio es la fuente canónica del paquete versionado de artefactos del
 
 - [especificación normativa](spec/PROTOCOL.md);
 - [glosario del protocolo](CONTEXT.md);
-- [21 JSON Schema](schemas/README.md);
+- [22 JSON Schema normativos](schemas/README.md);
 - [vectores de conformidad válidos y no válidos](conformance/manifest.json);
 - [paquete criptográfico de 22 casos para los nueve perfiles de esquema del Signed Document
   Verification Profile](cryptography/README.md);
+- [paquete de primera admisión y confianza histórica con 5 casos y 30
+  evaluaciones](admission/README.md);
 - [recursos de marca](assets/brand/).
 
 Las implementaciones deben fijar una versión publicada del protocolo o un commit. Pueden incluir
@@ -68,17 +70,21 @@ conformidad completa del comportamiento del runtime.
 
 ## Conformidad
 
-El manifest contiene actualmente 56 casos: 26 documentos que se espera que sean válidos y 30 que
+El manifest estructural contiene 58 vectores: 27 documentos que se espera que sean válidos y 31 que
 se espera que sean no válidos. La conformidad estructural con los JSON Schema es necesaria, pero
 no suficiente; las implementaciones también deben aplicar las reglas de máquina de estados,
 ordenación, epoch, lease, budget, jerarquía, firma y autorización de la especificación.
 
-El manifest criptográfico independiente contiene 22 casos que cubren los nueve perfiles de esquema
-del Signed Document Verification Profile. Superarlo demuestra la conformidad con las evaluaciones
-declaradas a lo largo de las seis etapas de verificación criptográfica de la sección 6.4; no
-demuestra la validación del First-Admission Record ni de la confianza histórica, la vigencia
-temporal de los Command ni el control de desfase de reloj, ni la autorización del firmante según
-su rol y las políticas aplicables.
+El manifest criptográfico independiente contiene 22 casos y 62 evaluaciones que cubren los nueve
+perfiles de esquema del Signed Document Verification Profile. Superarlo demuestra la conformidad
+con las evaluaciones declaradas a lo largo de las seis etapas de verificación criptográfica de la
+sección 6.4.
+
+El manifest de Admission separado contiene 5 casos y 30 evaluaciones para el First-Admission Record
+y la confianza histórica, por encima de la verificación criptográfica. Admission permanece
+separado de las seis etapas criptográficas. Ninguno de los dos paquetes demuestra la vigencia o el
+desfase de reloj de los Command ni la autorización del firmante; esas comprobaciones quedan fuera
+de este alcance.
 
 La implementación en Python puede ejecutar directamente los vectores de este repositorio:
 
@@ -94,10 +100,11 @@ python -m pip install --require-hashes --no-deps --only-binary=:all: \
 python scripts/check_repository_policy.py
 python scripts/validate_protocol.py
 python scripts/validate_crypto_vectors.py
+python scripts/validate_admission_vectors.py
 ```
 
 ## Licencia
 
-La especificación, los JSON Schema, los vectores de conformidad, los vectores criptográficos y los
-recursos de marca se distribuyen bajo la licencia [Apache-2.0](LICENSE). La licencia no concede
+La especificación, los JSON Schema, los vectores de conformidad, criptográficos y de Admission, y
+los recursos de marca se distribuyen bajo la licencia [Apache-2.0](LICENSE). La licencia no concede
 derechos sobre marcas comerciales.

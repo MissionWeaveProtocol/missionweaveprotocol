@@ -409,34 +409,103 @@ A cryptographically verified result may therefore exist before separate first-ad
 historical-trust validation by the accepting Organization.
 
 A **First-Admission Record** is authoritative append metadata outside the Signed Document
-Verification Profile in an Organization-controlled Group or Registry acceptance log. It MUST
-record at least the signing hash, the Organization-assigned trusted acceptance time as an RFC 3339
-instant, the resolved key ID, and its bound Principal. The log MUST authenticate the accepting
-service, restrict writes to Organization-authorized services, and preserve append-only audit
-integrity.
+Verification Profile. It MUST conform to `schemas/first-admission-record.schema.json` and contain
+exactly these nine required fields: `protocolVersion`, `admissionRecordId`, `organizationId`,
+`documentKind`, `signingHash`, `keyId`, `principal`, `trustedAcceptedAt`, and `acceptedBy`.
+`trustedAcceptedAt` is the Organization-assigned trusted acceptance instant. The record is not a
+Signed Document, MUST NOT contain a `signature`, does not authenticate itself, and MUST NOT be
+accepted on the basis of its own bytes alone.
 
-Admission or historical-trust validation MUST authenticate the accepting service and verify the
-record's append-only integrity. It MUST recompute the signing hash from the stage-5 bytes and
-require it to equal the record's signing hash. It MUST also require the record's key ID and bound
-Principal to equal the stage-4 resolved binding and MUST validate the trusted acceptance time
-against that same key's validity interval. A record for the same unsigned content under a different
-key or Principal MUST NOT be reused.
+The field constraints are:
 
-For a Signed Event, that Event document MUST NOT serve as its own First-Admission Record or rely on
-the signature being anchored to authenticate the record. A later signed Event MAY publish or
-reference the record, but its signature authenticates the Event's reference to the record, not the
-record or its admission anchor.
+| Field | Constraint |
+| --- | --- |
+| `protocolVersion` | the v0.1 `protocolVersion` constant |
+| `admissionRecordId` | absolute protocol identifier |
+| `organizationId` | absolute protocol identifier |
+| `documentKind` | one of `agent-card`, `approval`, `artifact`, `command`, `context-package`, `event`, `evidence`, `extension-profile`, or `group-snapshot` |
+| `signingHash` | `sha256:` followed by 64 lower-case hexadecimal digits |
+| `keyId` | absolute protocol identifier |
+| `principal` | exact common actor shape |
+| `trustedAcceptedAt` | RFC 3339 under the protocol timestamp profile |
+| `acceptedBy` | common actor shape with `type: service` |
 
-On first admission of a Signed Document without such a record, the Organization MUST require the
-signing key to be valid at the trusted acceptance time and then append the First-Admission Record.
-It MUST NOT accept a newly presented document solely because its signer backdated the protected
-time to precede expiry or revocation. A newly presented Command MUST additionally satisfy an
-Organization-defined, bounded freshness and clock-skew window for `issuedAt`.
+The lexical spelling of `trustedAcceptedAt` MUST be retained. Unlike the two protected Signed
+Document timestamps, it is not required to use uppercase `Z`; it is compared as an exact instant.
 
-A later expiry or revocation does not by itself invalidate an anchored historical signature when
-both its protected signed time and trusted acceptance time were within the key's validity interval.
-Historical replay MUST perform the six cryptographic stages and validate the First-Admission Record
-rather than treating the document as a new admission.
+Within one Organization's Admission Log, the logical lookup and append key is
+`(organizationId, signingHash)`. The log MUST authenticate the accepting service, restrict writes
+to Organization-authorized services, preserve append-only integrity, support an authoritative
+lookup that distinguishes found from authoritative absence, and provide one atomic
+append-or-return-existing operation for that logical key. Unavailable, indeterminate,
+unauthenticated, integrity-failed, conflicting, or failed-commit outcomes MUST fail closed. A
+caller-supplied trust, authentication, or integrity boolean MUST NOT replace the adapter's typed
+result.
+
+At most one authoritative record may exist for one logical key. One `admissionRecordId` MUST NOT
+identify records under different logical keys. A valid compatible record found on retry is an
+idempotent success and MUST be returned without append. A record under the same logical key with a
+different document kind, key ID, or Principal is a conflict and MUST NOT be replaced, repaired, or
+silently reconciled.
+
+Admission is a separate semantic layer after the six cryptographic stages. Its protected
+diagnostic stage is `admission`; it is not a seventh cryptographic stage and does not alter the
+signing bytes, signing hash, key resolution, or signature result. Every admission or
+historical-trust path MUST first complete all six stages and retain the resulting Organization,
+document kind, signing hash, resolved key ID, bound Principal, and effective key-validity
+interval.
+
+For first admission, the Registry evidence supplied to stage 4 MUST be current and applicable to a
+new admission decision as required above. After six-stage verification, the implementation MUST
+look up `(organizationId, signingHash)`. A found record MUST be validated as described below. Only
+an authoritative absence permits the implementation to obtain trusted acceptance context, prepare
+a candidate First-Admission Record, and call append-or-return-existing. First admission is not
+complete until the authenticated record returned by that operation, whether newly committed or
+concurrently existing, has itself been validated. Validating only the candidate bytes is not
+sufficient.
+
+Candidate preparation MUST NOT append an Event, execute a state transition, or imply that
+admission succeeded. A concurrent winner's returned `admissionRecordId` or `trustedAcceptedAt` MAY
+differ from the losing candidate, but the returned record is accepted only when every binding and
+interval rule below succeeds.
+
+Historical replay MUST rerun the six cryptographic stages with authoritative historical Registry
+evidence containing the complete retained validity history needed for the protected signed time.
+It MUST then require a found First-Admission Record and validate it. Historical replay MUST NOT
+issue new trusted acceptance context, append a missing record, or treat the document as a new
+admission. A later expiry or revocation does not by itself invalidate an anchored historical
+signature when both the protected signed time and `trustedAcceptedAt` were within the selected
+key's interval.
+
+Record validation MUST strictly parse exactly one UTF-8 JSON value, apply the normative Schema,
+and require exact equality between the record and six-stage evidence for `organizationId`,
+`documentKind`, `signingHash`, `keyId`, and `principal`. The record's `acceptedBy` MUST exactly equal
+the service identity authenticated by the Admission Log result. A record for the same unsigned
+content under another Organization, document kind, key ID, or Principal MUST NOT be reused. The
+record's append-only integrity and authenticated service identity are deployment assertions of the
+successful Admission Log adapter result; the record does not prove either property by itself.
+
+For trusted acceptance instant `t`, admission is valid only when `validFrom <= t`, `validUntil` is
+absent or `t < validUntil`, and `revokedAt` is absent or `t < revokedAt`. These are the same
+half-open boundaries used for the protected signed time, evaluated independently at
+`trustedAcceptedAt`, using the earliest effective retained `validUntil` and `revokedAt` boundaries.
+A newly presented document MUST NOT be accepted solely because its signer backdated the protected
+time to precede expiry or revocation.
+
+For a Signed Event, that Event document MUST NOT serve as its own First-Admission Record through
+either lookup or append-or-return-existing, and its signature MUST NOT be treated as authenticating
+the record or its admission anchor. A later Signed Event MAY publish or reference a separate
+record; its signature authenticates only the Event's reference.
+
+Every failure after six-stage completion in lookup, candidate preparation, trusted-time interval
+validation, append-or-return-existing, returned-record parsing, Schema validation, binding,
+authenticated-service comparison, or Event self-anchoring MUST map on the wire to
+`AUTH_INVALID_SIGNATURE`. The protected audit diagnostic MUST retain stage `admission` and a stable
+reason without revealing that reason to the untrusted caller.
+
+A newly presented Command MUST additionally satisfy an Organization-defined, bounded freshness
+and clock-skew window for `issuedAt`. That freshness check and signer authorization under
+applicable role and policy remain separate from First-Admission Record validation.
 
 Cryptographic verification authenticates the Principal bound to the key; it does not grant that
 Principal protocol authority. Before accepting a state transition, the relevant Organization or
@@ -446,12 +515,13 @@ time. In particular, `acceptedBy` MUST be an authorized Group Authority or Organ
 service, an Agent Card issuer MUST be authorized for its Organization, an Extension Profile
 approver and Approval approver MUST satisfy Organization policy, and a Group Snapshot creator MUST
 be an authorized archival service. This authorization check occurs only after all six
-cryptographic stages succeed; failure is `AUTH_FORBIDDEN`.
+cryptographic stages and any applicable first-admission or historical-trust validation succeed;
+failure is `AUTH_FORBIDDEN`.
 
 Invalid JSON, duplicate members, or a value that cannot enter the JCS data model is a
 `PROTOCOL_VIOLATION`. Schema, required-envelope, or unsupported-algorithm failure is
-`SCHEMA_VALIDATION_FAILED`. Failure in cryptographic stage 3, 4, or 6, or in first-admission key
-validity, First-Admission Record, or Command-freshness checks, is `AUTH_INVALID_SIGNATURE`;
+`SCHEMA_VALIDATION_FAILED`. Failure in cryptographic stage 3, 4, or 6, at semantic stage
+`admission`, or in Command-freshness checks is `AUTH_INVALID_SIGNATURE`;
 examples include a time-binding mismatch, schema-valid base64url with nonzero unused pad bits,
 unknown or wrongly bound key, invalid key interval, noncanonical or non-prime-order public key,
 malformed decoded key or signature length, or cryptographic mismatch. A wire response MUST NOT
@@ -1185,7 +1255,7 @@ the specification patch version without changing the wire version. A change that
 semantics or required fields requires a new wire minor or major version and handshake
 negotiation.
 
-The 21 normative schemas are:
+The 22 normative schemas are:
 
 * `common.schema.json`
 * `websocket-frame.schema.json`
@@ -1204,6 +1274,7 @@ The 21 normative schemas are:
 * `context-package.schema.json`
 * `group-snapshot.schema.json`
 * `extension-profile.schema.json`
+* `first-admission-record.schema.json`
 * `error.schema.json`
 
 ## 22. Conformance and required proof of concept
@@ -1211,10 +1282,13 @@ The 21 normative schemas are:
 An implementation conforms to MissionWeaveProtocol 0.1 only if it:
 
 * validates every durable object against the normative schemas;
-* passes valid and invalid vectors in `conformance/vectors/`;
+* passes all 58 structural vectors in `conformance/manifest.json`, comprising 27 expected-valid
+  and 31 expected-invalid documents;
 * passes every evaluation in `cryptography/manifest.json`, covering all nine schema profiles in
   the Signed Document Verification Profile and their canonical signing bytes, hashes, key
   bindings, and signatures;
+* passes all 30 evaluations in the independent `admission/manifest.json` behavioral bundle,
+  covering first admission and historical replay across five cases;
 * enforces all Mission and WorkItem transitions;
 * demonstrates replay, deduplication, optimistic concurrency, and fencing;
 * demonstrates authorization and the Message/non-authority invariant; and
@@ -1227,12 +1301,21 @@ remove exactly the top-level `artifactDigest` member, serialize the remaining ma
 8785 JCS, hash those bytes with SHA-256, and compare `sha256:` followed by the 64 lower-case
 hexadecimal digest digits. Each declared artifact hash applies to the exact file bytes.
 
+For the Admission bundle, `manifest.fixtureSchemas` identifies the First-Admission Record and
+Registry fixture Schemas, and `manifest.cryptography.artifactDigest` pins the unchanged
+cryptography bundle used by every evaluation. Its `artifactDigest` is calculated with the same
+top-level-member removal, RFC 8785 JCS, and SHA-256 procedure. A runner MUST verify all declared
+Admission artifact bytes and hashes, the pinned cryptography digest, and every referenced file
+before executing the declared adapter outcomes.
+
 Passing `missionweaveprotocol-conformance` or the repository's schema vectors demonstrates
 schema-and-vector conformance only. It is necessary but not sufficient evidence of full protocol
 conformance. Passing `cryptography/manifest.json` demonstrates only the six cryptographic
-verification stages in Section 6.4. It does not demonstrate First-Admission Record or
-historical-trust validation, Command freshness and clock-skew enforcement, or signer authorization
-under applicable role and policy; an implementation MUST prove those requirements separately.
+verification stages in Section 6.4. Passing `admission/manifest.json` additionally demonstrates
+the declared First-Admission Record and historical-replay evaluations, but it does not demonstrate
+Command freshness and clock-skew enforcement, signer authorization under applicable role and
+policy, or a portable deployed Admission Log proof format. An implementation MUST prove those
+requirements separately.
 A reference implementation MUST claim full MissionWeaveProtocol 0.1 conformance only when
 automated positive and negative evidence covers every core Command and Event kind
 above and every transition row in Sections 7.1 and 10.2; otherwise it MUST report the narrower

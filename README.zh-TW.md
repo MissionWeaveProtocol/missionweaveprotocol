@@ -27,10 +27,11 @@ MissionWeaveProtocol 不是 Agent-to-Agent RPC、物理對等路由、聯邦機�
 
 - [規範性協定規格](spec/PROTOCOL.md)；
 - [協定術語表](CONTEXT.md)；
-- [21 個 JSON Schema](schemas/README.md)；
+- [22 個規範性 JSON Schema](schemas/README.md)；
 - [有效與無效的符合性測試向量](conformance/manifest.json)；
 - [涵蓋 Signed Document Verification Profile 中 9 種 Schema 驗證設定、包含 22 個案例的
   密碼學測試套件](cryptography/README.md)；
+- [包含 5 個案例與 30 個評估項目的首次接納與歷史信任測試套件](admission/README.md)；
 - [品牌資源](assets/brand/)。
 
 實作必須固定使用某個已發布的協定版本或 commit。實作可以內建 JSON Schema 和測試向量以供
@@ -59,14 +60,18 @@ Schema 與測試向量符合性，並不聲稱具備完整的 runtime 行為符�
 
 ## 符合性
 
-manifest 目前包含 56 個測試案例：26 個預期有效的文件和 30 個預期無效的文件。結構性的
+結構性 manifest 包含 58 個測試向量：27 個預期有效的文件和 31 個預期無效的文件。結構性的
 JSON Schema 符合性是必要條件，但並不充分；實作還必須執行協定規格中的狀態機、排序、
 epoch、lease、budget、層級、簽名和授權規則。
 
-獨立的密碼學 manifest 包含 22 個案例，涵蓋 Signed Document Verification Profile 中全部 9
-種 Schema 驗證設定。通過此測試套件可表明實作符合第 6.4 節六階段密碼學驗證中已宣告的評估
-項；它不能證明 First-Admission Record（首次接納記錄）或歷史信任驗證、Command 新鮮度或
-時鐘偏差約束，也不能證明依據簽署者角色和適用策略進行的授權。
+獨立的密碼學 manifest 包含 22 個案例與 62 個評估項目，涵蓋 Signed Document Verification
+Profile 中全部 9 種 Schema 驗證設定。通過此測試套件可表明實作符合第 6.4 節六階段密碼學
+驗證中已宣告的評估項目。
+
+獨立的 Admission manifest 包含 5 個案例與 30 個評估項目，用於驗證疊加在密碼學驗證之上的
+First-Admission Record（首次接納記錄）與歷史信任行為。Admission 與六個密碼學階段彼此
+獨立。兩套測試套件都不能證明 Command 新鮮度或時鐘偏差約束，也不能證明簽署者授權；這些
+檢查不屬於本次範圍。
 
 Python 實作可以直接執行本儲存庫的測試向量：
 
@@ -82,9 +87,10 @@ python -m pip install --require-hashes --no-deps --only-binary=:all: \
 python scripts/check_repository_policy.py
 python scripts/validate_protocol.py
 python scripts/validate_crypto_vectors.py
+python scripts/validate_admission_vectors.py
 ```
 
 ## 授權條款
 
-協定規格、JSON Schema、符合性與密碼學測試向量和品牌資源均採用 [Apache-2.0](LICENSE) 授權條款。
-此授權不授予任何商標權。
+協定規格、JSON Schema、符合性、密碼學與 Admission 測試向量和品牌資源均採用
+[Apache-2.0](LICENSE) 授權條款。此授權不授予任何商標權。

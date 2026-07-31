@@ -27,10 +27,11 @@ MissionWeaveProtocol 不是 Agent-to-Agent RPC、物理对等路由、联邦协�
 
 - [规范性协议说明](spec/PROTOCOL.md)；
 - [协议术语表](CONTEXT.md)；
-- [21 个 JSON Schema](schemas/README.md)；
+- [22 个规范性 JSON Schema](schemas/README.md)；
 - [有效与无效的符合性测试向量](conformance/manifest.json)；
 - [覆盖 Signed Document Verification Profile 中 9 种 Schema 验证配置、包含 22 个用例的
   密码学测试包](cryptography/README.md)；
+- [包含 5 个用例和 30 个评估项的首次接纳与历史信任测试包](admission/README.md)；
 - [品牌资源](assets/brand/)。
 
 实现必须固定使用某个已发布的协议版本或 commit。实现可以内置 JSON Schema 和测试向量以供
@@ -59,14 +60,18 @@ Schema 与测试向量符合性，并不声明完整的运行时行为符合性�
 
 ## 符合性
 
-manifest 当前包含 56 个测试用例：26 个预期有效的文档和 30 个预期无效的文档。结构性的
+结构性 manifest 包含 58 个测试向量：27 个预期有效的文档和 31 个预期无效的文档。结构性的
 JSON Schema 符合性是必要条件，但并不充分；实现还必须执行协议说明中的状态机、排序、
 epoch、lease、budget、层级、签名和授权规则。
 
-独立的密码学 manifest 包含 22 个用例，覆盖 Signed Document Verification Profile 中全部 9
-种 Schema 验证配置。通过该测试包可表明实现符合第 6.4 节六阶段密码学验证中已声明的评估项；
-它不能证明 First-Admission Record（首次接纳记录）或历史信任验证、Command 新鲜度或时钟
-偏差约束，也不能证明依据签名者角色和适用策略进行的授权。
+独立的密码学 manifest 包含 22 个用例和 62 个评估项，覆盖 Signed Document Verification
+Profile 中全部 9 种 Schema 验证配置。通过该测试包可表明实现符合第 6.4 节六阶段密码学验证中
+已声明的评估项。
+
+独立的 Admission manifest 包含 5 个用例和 30 个评估项，用于验证叠加在密码学验证之上的
+First-Admission Record（首次接纳记录）与历史信任行为。Admission 与六个密码学阶段彼此独立。
+两套测试包都不能证明 Command 新鲜度或时钟偏差约束，也不能证明签名者授权；这些检查不属于
+本次范围。
 
 Python 实现可以直接运行本仓库的测试向量：
 
@@ -82,9 +87,10 @@ python -m pip install --require-hashes --no-deps --only-binary=:all: \
 python scripts/check_repository_policy.py
 python scripts/validate_protocol.py
 python scripts/validate_crypto_vectors.py
+python scripts/validate_admission_vectors.py
 ```
 
 ## 许可证
 
-协议说明、JSON Schema、符合性与密码学测试向量和品牌资源均采用 [Apache-2.0](LICENSE) 许可证。该
-许可证不授予任何商标权。
+协议说明、JSON Schema、符合性、密码学与 Admission 测试向量和品牌资源均采用
+[Apache-2.0](LICENSE) 许可证。该许可证不授予任何商标权。
